@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If this guide informs your work, please cite the repository and include the commit or access date you used."
+title: "人生进阶指南 / Life Level-up Guide"
+abstract: >-
+  An evolving bilingual open-content guide that connects English learning,
+  AI-assisted practice, real projects, recovery, and evidence-based reflection.
+  The guide text is licensed CC BY-NC 4.0; site configuration, checks, and
+  build scripts are licensed MIT.
+authors:
+  - family-names: "韩"
+    given-names: "先凯"
+    name-suffix: "（笔名：离谱）"
+url: "https://byoungd.github.io/up/"
+repository-code: "https://github.com/byoungd/up"
+license: "CC-BY-NC-4.0"
+keywords:
+  - lifelong learning
+  - English learning
+  - AI literacy
+  - Chinese
+  - self-directed learning

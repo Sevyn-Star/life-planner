@@ -1,0 +1,6 @@
+node_modules/
+.codex-artifact-work/
+outputs/
+docs/.vitepress/dist/
+playwright-report/
+test-results/
