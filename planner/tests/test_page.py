@@ -97,6 +97,27 @@ class PageTests(unittest.TestCase):
                     ],
                 )
                 self.assertEqual(saved["title"], "我不知道从哪开始")
+                renamed = chats.save_chat(
+                    "abc12345",
+                    [
+                        {"role": "user", "content": "我不知道从哪开始"},
+                        {"role": "assistant", "content": "先动一下。"},
+                    ],
+                    title="重新出发",
+                    note="这周只看从哪开始",
+                )
+                self.assertEqual(renamed["title"], "重新出发")
+                self.assertEqual(renamed["note"], "这周只看从哪开始")
+                kept = chats.save_chat(
+                    "abc12345",
+                    [
+                        {"role": "user", "content": "我不知道从哪开始"},
+                        {"role": "assistant", "content": "先动一下。"},
+                    ],
+                )
+                self.assertEqual(kept["title"], "重新出发")
+                self.assertEqual(kept["note"], "这周只看从哪开始")
+                self.assertEqual(chats.list_chats()[0]["note"], "这周只看从哪开始")
                 loaded = chats.load_chat("abc12345")
                 self.assertEqual(
                     loaded["messages"],

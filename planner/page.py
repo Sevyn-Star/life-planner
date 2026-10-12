@@ -55,7 +55,13 @@ class Handler(BaseHTTPRequestHandler):
             data = json.loads(self._read_body())
             if not isinstance(data, dict) or not isinstance(data.get("messages"), list):
                 raise ValueError("请求不完整。")
-            saved = save_chat(path.removeprefix("/chats/"), data["messages"])
+            title = data.get("title")
+            note = data.get("note")
+            if title is not None and not isinstance(title, str):
+                raise ValueError("请求不完整。")
+            if note is not None and not isinstance(note, str):
+                raise ValueError("请求不完整。")
+            saved = save_chat(path.removeprefix("/chats/"), data["messages"], title=title, note=note)
         except (ValueError, json.JSONDecodeError) as exc:
             self._send_text(400, str(exc) or "请求不完整。")
             return

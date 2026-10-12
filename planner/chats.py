@@ -20,6 +20,7 @@ def list_chats() -> list[dict]:
             {
                 "id": data["id"],
                 "title": data["title"],
+                "note": data["note"],
                 "updated": data["updated"],
             }
         )
@@ -34,25 +35,41 @@ def load_chat(chat_id: str) -> dict | None:
     return _read(path)
 
 
-def save_chat(chat_id: str, messages: list) -> dict:
+def save_chat(chat_id: str, messages: list, title: str | None = None, note: str | None = None) -> dict:
     path = _path(chat_id)
     if path is None:
         raise ValueError("对话编号不对")
+    existing = _read(path) if path.is_file() else None
     kept = _messages(messages)
-    title = "新的对话"
-    for item in kept:
-        if item["role"] == "user" and item["content"].strip():
-            title = item["content"].strip().replace("\n", " ")[:18]
-            break
+    if isinstance(title, str) and title.strip():
+        chosen = " ".join(title.split())[:32]
+    elif title is None and existing and existing.get("title"):
+        chosen = existing["title"]
+    else:
+        chosen = _title_from(kept)
+    if isinstance(note, str):
+        remark = " ".join(note.split())[:80]
+    elif existing:
+        remark = existing.get("note") or ""
+    else:
+        remark = ""
     data = {
         "id": chat_id,
-        "title": title,
+        "title": chosen,
+        "note": remark,
         "updated": datetime.now().astimezone().isoformat(timespec="seconds"),
         "messages": kept,
     }
     CHATS_DIR.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    return {"id": chat_id, "title": title, "updated": data["updated"]}
+    return {"id": chat_id, "title": chosen, "note": remark, "updated": data["updated"]}
+
+
+def _title_from(messages: list[dict]) -> str:
+    for item in messages:
+        if item["role"] == "user" and item["content"].strip():
+            return " ".join(item["content"].split())[:18]
+    return "新的对话"
 
 
 def _path(chat_id: str):
@@ -71,6 +88,7 @@ def _read(path) -> dict | None:
     return {
         "id": data["id"],
         "title": str(data.get("title") or "新的对话"),
+        "note": " ".join(str(data.get("note") or "").split())[:80],
         "updated": str(data.get("updated") or ""),
         "messages": _messages(data.get("messages")),
     }

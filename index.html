@@ -62,9 +62,6 @@
       color: inherit;
       font: inherit;
       text-align: left;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
       cursor: pointer;
     }
     .chats button:hover { background: #f4f6f9; }
@@ -79,6 +76,45 @@
     header { padding: 1.1rem 1.15rem 0.35rem; }
     h1 { margin: 0; font-size: 1.15rem; font-weight: 650; letter-spacing: -0.02em; }
     header p { margin: 0.25rem 0 0; color: #5c6778; font-size: 0.92rem; }
+    .menu {
+      position: fixed;
+      z-index: 20;
+      min-width: 8.5rem;
+      padding: 0.3rem;
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: 0 8px 24px rgba(28, 36, 48, 0.16);
+    }
+    .menu[hidden] { display: none; }
+    .menu button {
+      display: block;
+      width: 100%;
+      padding: 0.45rem 0.65rem;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    .menu button:hover { background: #f3f5f8; }
+    .chats input {
+      width: 100%;
+      border: 0;
+      border-radius: 6px;
+      background: #fff;
+      color: inherit;
+      font: inherit;
+      padding: 0.15rem 0.3rem;
+    }
+    .chat-name, .chat-note {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .chat-note { margin-top: 0.12rem; color: #5c6778; font-size: 0.78rem; }
     .thread {
       flex: 1;
       overflow-y: auto;
@@ -184,6 +220,10 @@
     </form>
     <!-- result -->
   </div>
+  <div id="menu" class="menu" hidden>
+    <button type="button" data-act="rename">重命名</button>
+    <button type="button" data-act="note">写备注</button>
+  </div>
   <script>
     const thread = document.querySelector("#thread");
     const chats = document.querySelector("#chats");
@@ -191,10 +231,13 @@
     const box = document.querySelector("#text");
     const send = document.querySelector(".send");
     const form = document.querySelector("#ask");
+    const menu = document.querySelector("#menu");
     const origin = location.protocol === "file:" ? "http://127.0.0.1:8765" : "";
     const openKey = "planner-open";
     let turns = [];
     let currentId = localStorage.getItem(openKey) || "";
+    let currentTitle = "";
+    let currentNote = "";
 
     document.querySelector("#new-chat").addEventListener("click", () => beginNew());
     form.addEventListener("submit", (event) => event.preventDefault());
@@ -210,6 +253,17 @@
       box.style.height = Math.min(box.scrollHeight, 120) + "px";
     });
     bindStarters(starter);
+    menu.addEventListener("click", (event) => {
+      const act = event.target.getAttribute("data-act");
+      const id = menu.dataset.id;
+      hideMenu();
+      if (act && id) editChat(id, act);
+    });
+    document.addEventListener("click", () => hideMenu());
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") hideMenu();
+    });
+    window.addEventListener("scroll", () => hideMenu(), true);
     loadChats();
 
     function bindStarters(root) {
@@ -231,6 +285,8 @@
       currentId = "";
       localStorage.removeItem(openKey);
       turns = [];
+      currentTitle = "";
+      currentNote = "";
       showStarter();
       drawChats(window.__chats || []);
       box.focus();
@@ -254,9 +310,24 @@
       list.forEach((item) => {
         const button = document.createElement("button");
         button.type = "button";
-        button.textContent = item.title || "新的对话";
+        const name = document.createElement("span");
+        name.className = "chat-name";
+        name.textContent = item.title || "新的对话";
+        button.append(name);
+        button.dataset.id = item.id;
+        if (item.note) {
+          const remark = document.createElement("span");
+          remark.className = "chat-note";
+          remark.textContent = item.note;
+          button.append(remark);
+        }
         if (item.id === currentId) button.className = "active";
         button.addEventListener("click", () => openChat(item.id));
+        button.addEventListener("contextmenu", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          openMenu(event.clientX, event.clientY, item.id);
+        });
         chats.append(button);
       });
     }
@@ -269,6 +340,8 @@
       currentId = id;
       localStorage.setItem(openKey, id);
       turns = chat.messages || [];
+      currentTitle = chat.title && chat.title !== "新的对话" ? chat.title : "";
+      currentNote = chat.note || "";
       thread.replaceChildren();
       turns.forEach((item) => addBubble(item.role === "user" ? "mine" : "reply", item.content));
       drawChats(window.__chats || []);
@@ -289,14 +362,104 @@
       const response = await fetch(origin + "/chats/" + currentId, {
         method: "PUT",
         headers: { "Content-Type": "application/json; charset=utf-8" },
-        body: JSON.stringify({ messages: turns }),
+        body: JSON.stringify({
+          messages: turns,
+          title: currentTitle,
+          note: currentNote,
+        }),
       });
       if (!response.ok) return;
       const saved = await response.json();
+      currentTitle = saved.title || currentTitle;
+      currentNote = saved.note || "";
       const list = (window.__chats || []).filter((item) => item.id !== saved.id);
       list.unshift(saved);
       window.__chats = list;
       drawChats(list);
+    }
+
+    function hideMenu() {
+      menu.hidden = true;
+      menu.dataset.id = "";
+    }
+
+    function openMenu(x, y, id) {
+      menu.dataset.id = id;
+      menu.hidden = false;
+      menu.style.left = "0px";
+      menu.style.top = "0px";
+      const width = menu.offsetWidth;
+      const height = menu.offsetHeight;
+      const left = Math.min(x, window.innerWidth - width - 8);
+      const top = Math.min(y, window.innerHeight - height - 8);
+      menu.style.left = Math.max(8, left) + "px";
+      menu.style.top = Math.max(8, top) + "px";
+    }
+
+    function editChat(id, act) {
+      const button = chats.querySelector(`[data-id="${id}"]`);
+      if (!button) return;
+      const item = (window.__chats || []).find((chat) => chat.id === id) || {};
+      const isName = act === "rename";
+      let span = button.querySelector(isName ? ".chat-name" : ".chat-note");
+      if (!span) {
+        span = document.createElement("span");
+        span.className = "chat-note";
+        button.append(span);
+      }
+      const input = document.createElement("input");
+      input.maxLength = isName ? 32 : 80;
+      input.value = isName ? span.textContent : item.note || "";
+      input.placeholder = isName ? "对话名字" : "一句备注";
+      span.replaceWith(input);
+      input.focus();
+      input.select();
+      let done = false;
+      const finish = async () => {
+        if (done) return;
+        done = true;
+        const value = input.value.trim();
+        if (id === currentId) {
+          if (isName) currentTitle = value;
+          else currentNote = value;
+        }
+        const response = await fetch(origin + "/chats/" + id);
+        if (!response.ok) return;
+        const chat = await response.json();
+        const body = {
+          messages: chat.messages || [],
+          title: isName ? value : chat.title,
+          note: isName ? chat.note || "" : value,
+        };
+        const savedResponse = await fetch(origin + "/chats/" + id, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json; charset=utf-8" },
+          body: JSON.stringify(body),
+        });
+        if (!savedResponse.ok) return;
+        const saved = await savedResponse.json();
+        const list = (window.__chats || []).filter((chatItem) => chatItem.id !== id);
+        list.unshift(saved);
+        list.sort((a, b) => (a.updated < b.updated ? 1 : -1));
+        window.__chats = list;
+        if (id === currentId) {
+          currentTitle = saved.title || "";
+          currentNote = saved.note || "";
+        }
+        drawChats(list);
+      };
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          finish();
+        }
+        if (event.key === "Escape") {
+          done = true;
+          drawChats(window.__chats || []);
+        }
+      });
+      input.addEventListener("blur", () => finish());
+      input.addEventListener("click", (event) => event.stopPropagation());
     }
 
     function newId() {
