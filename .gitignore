@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+data/index/*.jsonl
+data/index/*.json
+!data/index/.gitkeep

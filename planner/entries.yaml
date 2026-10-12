@@ -1,0 +1,369 @@
+# 领域按这个顺序匹配，先命中的条目生效。
+# 具体技能在前，低谷和恢复在九十天之前，不知道从哪开始放在最后。
+entries:
+  - id: listening
+    label: 要练英语的听力
+    keywords:
+      - 听力
+      - 听英语
+      - 练听力
+      - 听不懂
+    paths:
+      - docs/threads/part-1/3-listening.md
+    templates:
+      - docs/templates/listening-audit.md
+    topic:
+      - 听力
+      - 首听
+      - 字幕
+      - 听不懂
+
+  - id: speaking
+    label: 要练英语的口语
+    keywords:
+      - 口语
+      - 练口语
+      - 开口说
+      - 不敢开口
+    paths:
+      - docs/threads/part-1/5-speaking.md
+    templates:
+      - docs/templates/speaking-evidence.md
+    topic:
+      - 口语
+      - 说话
+      - 复述
+
+  - id: reading
+    label: 要练英语的阅读
+    keywords:
+      - 练阅读
+      - 英语阅读
+      - 读英语
+      - 英文阅读
+      - 看不懂英文
+    paths:
+      - docs/threads/part-1/4-reading.md
+    templates:
+      - docs/templates/reading-evidence.md
+    topic:
+      - 阅读
+      - 文章
+      - 主旨
+
+  - id: writing
+    label: 要练英语的写作
+    keywords:
+      - 英语写作
+      - 练写作
+      - 写英语
+      - 英文写作
+    paths:
+      - docs/threads/part-1/6-writing.md
+    templates:
+      - docs/templates/writing-evidence.md
+    topic:
+      - 写作
+      - 初稿
+      - 修订
+
+  - id: grammar
+    label: 要练英语的语法
+    keywords:
+      - 语法
+    paths:
+      - docs/threads/part-1/grammar.md
+    templates:
+      - docs/templates/grammar-evidence.md
+    topic:
+      - 语法
+      - 结构
+
+  - id: vocabulary
+    label: 要练英语的词汇
+    keywords:
+      - 词汇
+      - 背单词
+      - 记单词
+    paths:
+      - docs/threads/part-1/2-vocabulary.md
+    templates:
+      - docs/templates/vocabulary-audit.md
+    topic:
+      - 词汇
+      - 单词
+
+  - id: job
+    label: 求职、面试、远程协作
+    keywords:
+      - 求职
+      - 面试
+      - 远程协作
+      - 远程面试
+    paths:
+      - docs/threads/part-1/8-job-search-english.md
+    templates:
+      - docs/templates/interview-evidence.md
+    topic:
+      - 面试
+      - 岗位
+      - 远程
+
+  - id: english-ai
+    label: 用 AI 学英语
+    keywords:
+      - 用 AI 学英语
+      - 用AI学英语
+      - AI 学英语
+    paths:
+      - docs/threads/part-1/7-ai.md
+    templates:
+      - docs/templates/ai-task-brief.md
+    topic:
+      - 英语
+      - AI
+      - 基线
+
+  - id: no-users
+    label: 有想法但没有用户
+    keywords:
+      - 没有用户
+      - 没用户
+      - 没有客户
+      - 首批用户
+      - 没人用
+    paths:
+      - docs/threads/practice/customer-discovery.md
+    templates:
+      - docs/templates/startup-experiment.md
+    topic:
+      - 用户
+      - 访谈
+      - 试点
+      - 付费
+      - 假设
+
+  - id: interrupt
+    label: 总是中断
+    keywords:
+      - 总是中断
+      - 坚持不下去
+      - 无法坚持
+      - 一中断
+    paths:
+      - docs/threads/practice/discipline-and-consistency.md
+    templates:
+      - docs/templates/consistency-plan.md
+    topic:
+      - 中断
+      - 动作
+      - 停止
+
+  - id: ai
+    label: 想用 AI 学习或做项目
+    keywords:
+      - 用 AI
+      - 用AI
+      - 人工智能
+      - AI学习
+      - AI 学习
+    paths:
+      - docs/threads/part-3/
+    templates:
+      - docs/templates/ai-task-brief.md
+      - docs/templates/artifact-brief.md
+    topic:
+      - AI
+      - 判断
+      - 任务
+      - 来源
+
+  - id: family
+    label: 家庭学习
+    keywords:
+      - 家庭学习
+      - 孩子学习
+      - 初中生
+    paths:
+      - docs/threads/part-4/family-learning.md
+    templates:
+      - docs/templates/family-learning-agreement.md
+    topic:
+      - 孩子
+      - 家庭
+      - 协议
+
+  - id: recovery
+    label: 低谷、恢复
+    keywords:
+      - 低谷
+      - 状态很差
+      - 没力气
+      - 撑不住
+      - 失眠
+    paths:
+      - docs/threads/part-2/recovery.md
+      - docs/threads/part-4/daily-system.md
+    templates:
+      - docs/templates/life-practice-toolkit.md
+    topic:
+      - 恢复
+      - 最小
+      - 安全
+      - 容量
+      - 今天
+      - 身体
+      - 睡眠
+      - 边界
+    pin_titles:
+      - 什么时候不能只靠意志
+
+  - id: relationship
+    label: 关系
+    keywords:
+      - 分手
+      - 伴侣
+      - 吵架
+      - 亲密关系
+    paths:
+      - docs/threads/part-2/relationships.md
+    templates:
+      - docs/templates/life-practice-toolkit.md
+    topic:
+      - 关系
+      - 边界
+      - 道歉
+
+  - id: choice
+    label: 选择
+    keywords:
+      - 难以选择
+      - 怎么选
+      - 做决定
+      - 选择困难
+    paths:
+      - docs/threads/part-2/decision.md
+    templates:
+      - docs/templates/life-practice-toolkit.md
+    topic:
+      - 选择
+      - 决定
+      - 边界
+
+  - id: failure
+    label: 失败
+    keywords:
+      - 创业失败
+      - 项目失败
+      - 公司倒闭
+    paths:
+      - docs/threads/part-2/narrative-and-evidence.md
+      - docs/threads/part-2/entrepreneurship.md
+    templates:
+      - docs/templates/startup-experiment.md
+    topic:
+      - 失败
+      - 证据
+      - 假设
+
+  - id: self
+    label: 想弄清自己怎样运作
+    keywords:
+      - 认识自己
+      - 了解自己
+      - 怎样运作
+      - 和自己相处
+    paths:
+      - docs/threads/part-6/
+    templates:
+      - docs/templates/learning-state.md
+    topic:
+      - 自己
+      - 边界
+      - 羞耻
+
+  - id: week
+    label: 第一周过不完
+    keywords:
+      - 第一周
+      - 这周过不完
+    paths:
+      - docs/threads/part-4/week-1.md
+    templates:
+      - docs/templates/weekly-review.md
+    topic:
+      - 第一周
+      - 基线
+      - 复测
+
+  - id: rhythm
+    label: 日常节律
+    keywords:
+      - 日常节律
+      - 生活节律
+      - 作息乱
+    paths:
+      - docs/threads/part-4/rhythm-and-compounding.md
+      - docs/threads/part-4/daily-system.md
+    templates:
+      - docs/templates/rhythm-ledger.md
+    topic:
+      - 节律
+      - 最小
+      - 今天
+
+  - id: cycle
+    label: 要一个可以复查的周期
+    keywords:
+      - 九十天
+      - 90天
+      - 90 天
+      - 复查的周期
+    paths:
+      - docs/threads/part-5/90-day-plan.md
+    templates:
+      - docs/templates/90-day-cycle.md
+    topic:
+      - 九十
+      - 复查
+      - 证据
+    needs_fourteen_day_evidence: true
+
+  - id: english
+    label: 要练英语
+    keywords:
+      - 学英语
+      - 练英语
+      - 英语学习
+    paths:
+      - docs/threads/part-1/open-input.md
+      - docs/threads/part-1/0-cefr.md
+    templates:
+      - docs/templates/english-diagnostic.md
+    topic:
+      - 英语
+      - 基线
+      - 证据
+
+  - id: start
+    label: 阅读指南、序章
+    keywords:
+      - 不知道从哪开始
+      - 从哪开始
+      - 从哪里开始
+      - 不知道从哪里
+      - 重新开始
+      - 重新动一下
+      - 不知道做什么
+      - 不知道读哪
+    paths:
+      - docs/threads/part-0/
+    templates:
+      - docs/templates/learning-state.md
+    topic:
+      - 开始
+      - 入口
+      - 重新
+      - 最小
+      - 五分钟
+      - 真实问题
