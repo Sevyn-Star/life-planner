@@ -5,6 +5,7 @@ from pathlib import Path
 from planner.corpus.index import build_index
 from planner.model import ModelError
 from planner.model.config import configured_backend
+from planner.model.local.client import use_own_words
 from planner.model.context import resolve_summary
 from planner.paths import INDEX_PATH
 from planner.run import answer, run_fixtures
@@ -17,6 +18,7 @@ USAGE = """用法：
   python3 -m planner.cli --context data/context/sample-tight.md \"你的近况\"
 
 启用模型时设置 PLANNER_MODEL=api 或 local。没启用时仍用填段模板。
+models/ 里有 Qwen2.5 0.5B 时，书没筛中会用它写一段模型自述。
 默认把复查记在 data/sessions/current.yaml。五个验收问题不写会话。
 """
 
@@ -65,6 +67,7 @@ def main(argv: list[str] | None = None) -> int:
             " ".join(args),
             context=context,
             model=model,
+            own=use_own_words(model),
             session=session_arg or "current",
             session_dir=Path(session_dir) if session_dir else None,
         )

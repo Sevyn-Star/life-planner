@@ -15,7 +15,10 @@ python3 -m planner.cli --rebuild-index
 python3 -m planner.cli "我不知道从哪开始，只想重新动一下。今天有半小时。"
 python3 -m planner.cli --fixtures
 python3 -m unittest planner.tests.test_accept planner.tests.test_model
+python3 -m planner.page
 ```
+
+页面是项目根目录的 `index.html`，没有构建步骤。`python3 -m planner.page` 在本机打开 http://127.0.0.1:8765/ 。也可以直接用浏览器打开这个文件，提交仍发到同一地址。页面把书里的段落当参考，用白话把答案一句一句写出来。
 
 回复里的路径都在 `rensheng/` 下。书里对不上的问题会说明没筛中，并给出最接近的入口标题，不补一份规划。
 
@@ -34,7 +37,7 @@ export PLANNER_API_MODEL=模型名
 python3 -m planner.cli --context data/context/sample-tight.md "我不知道从哪开始，只想重新动一下。今天有半小时。"
 ```
 
-本地模型用 `PLANNER_MODEL=local`。权重放在项目外，说明在 `planner/model/local/README.md`。输入包和输出约定在 `planner/model/port.md`。
+本地模型用 `PLANNER_MODEL=local`。权重在项目的 `models/`。书没筛中时，页面和命令行会读这份权重，写一段模型自述。说明在 `planner/model/local/README.md`。输入包和输出约定在 `planner/model/port.md`。
 
 没有来源、没有日期、已经过期，或模型稿里出现筛中清单以外的路径时，回复退回填段模板，不把模型原文交给用户。`data/context/sample-invalid.md` 故意不写来源。
 

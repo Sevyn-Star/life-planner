@@ -13,7 +13,7 @@ API 和本地小模型都按这一份约定。配置里只启用一个：`PLANNE
 | 会话记录 | `data/sessions/`。有复查记录时含主线、入口、上次最小动作、要留下的证据、复查日期；没有会话时为空 |
 | 形势摘要 | `data/context/` 里当前这一份。要有标题、日期、来源、适用范围、失效日，并且未过期 |
 
-没有来源、没有日期或已经过期的摘要不读。目录里合格摘要不是恰好一份时，要用 `--context` 或 `PLANNER_CONTEXT` 指定。筛中不足两段、没有规划可写时，不调用模型。
+没有来源、没有日期或已经过期的摘要不读。目录里合格摘要不是恰好一份时，要用 `--context` 或 `PLANNER_CONTEXT` 指定。筛中不足两段时，API 不调用。本地权重在 `models/` 里时，只把筛选单和最接近的入口标题交给 Qwen2.5 0.5B，由它写一段模型自述。危险念头和「还没有十四天证据」的拒绝不交给它。
 
 输入是一个 JSON 对象，键为 `sheet`、`kept`、`session`、`context`。
 
@@ -40,9 +40,9 @@ API 和本地小模型都按这一份约定。配置里只启用一个：`PLANNE
 | `PLANNER_API_BASE` | API 根地址，默认 `https://api.openai.com/v1` |
 | `PLANNER_API_KEY` | API 密钥 |
 | `PLANNER_API_MODEL` | API 的模型名 |
-| `PLANNER_LOCAL_WEIGHTS` | 项目外的权重文件或目录 |
+| `PLANNER_LOCAL_WEIGHTS` | 项目 `models/` 里的权重文件或目录 |
 | `PLANNER_LOCAL_URL` | 本机 OpenAI 兼容服务的根地址 |
 | `PLANNER_LOCAL_MODEL` | 本机服务里的模型名 |
 | `PLANNER_CONTEXT` | 不传 `--context` 时用的摘要路径 |
 
-本地权重不提交进仓库，也不放进 `rensheng/`。`local/` 只核对路径在项目外，不把权重读进输入包。
+本地权重放在项目的 `models/`，不提交进仓库，也不放进 `rensheng/`。`local/` 只核对路径在这个目录里，不把权重读进输入包。

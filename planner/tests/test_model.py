@@ -15,7 +15,7 @@ from planner.model import ModelError
 from planner.model.api.client import complete as complete_api
 from planner.model.config import configured_backend
 from planner.model.context import load_summary, resolve_summary
-from planner.model.local.client import checked_weights, complete as complete_local
+from planner.model.local.client import checked_weights, complete as complete_local, linked_weights, use_own_words
 from planner.paths import CONTEXT_DIR, CORPUS, INDEX_PATH, ROOT, SESSIONS_DIR
 from planner.reply.check import _outside, _summary_numbers
 from planner.run import answer, run_fixtures
@@ -46,6 +46,10 @@ def _model(action: str, situation: str):
 
 def _boom(messages, package):
     raise AssertionError("模型不该被调用")
+
+
+def _no_speaker(sheet, nearest):
+    raise AssertionError("不该组织自述")
 
 
 def _no_network(*args, **kwargs):
@@ -306,7 +310,7 @@ class ModelTests(unittest.TestCase):
         self.assertEqual(body["messages"][0]["role"], "system")
         self.assertEqual(body["messages"][1]["role"], "user")
 
-    def test_local_weights_stay_outside_the_repo(self):
+    def test_local_weights_stay_in_the_models_dir(self):
         opener = _Opener(_payload(TIGHT_ACTION, TIGHT_SITUATION))
         with self.assertRaises(ModelError):
             complete_local({}, opener=opener)
@@ -326,8 +330,16 @@ class ModelTests(unittest.TestCase):
             inside.unlink()
 
         with tempfile.TemporaryDirectory() as tmp:
-            weights = Path(tmp) / "weights"
-            weights.write_text("SECRETWEIGHT", encoding="utf-8")
+            outside = Path(tmp) / "weights"
+            outside.write_text("SECRETWEIGHT", encoding="utf-8")
+            os.environ["PLANNER_LOCAL_WEIGHTS"] = str(outside)
+            with self.assertRaises(ModelError):
+                checked_weights()
+
+        weights = ROOT / "models" / "_tmp_weights"
+        weights.parent.mkdir(exist_ok=True)
+        weights.write_text("SECRETWEIGHT", encoding="utf-8")
+        try:
             os.environ["PLANNER_LOCAL_WEIGHTS"] = str(weights)
             os.environ["PLANNER_LOCAL_URL"] = "http://127.0.0.1:9/v1"
             os.environ["PLANNER_LOCAL_MODEL"] = "small"
@@ -339,6 +351,46 @@ class ModelTests(unittest.TestCase):
             self.assertNotIn("SECRETWEIGHT", raw)
             self.assertNotIn(str(weights), raw)
             self.assertTrue(request.full_url.startswith("http://127.0.0.1:9/v1/chat/completions"))
+        finally:
+            weights.unlink()
+
+    def test_missing_book_uses_linked_model_words(self):
+        def speaker(sheet, nearest):
+            self.assertEqual(sheet.domain, "书外")
+            self.assertEqual(nearest, "阅读指南、序章")
+            return (
+                "今天先把想问的事写成一句，留下这一句，十四天后再看。\n"
+                "见 rensheng/docs/threads/part-0/reader-guide.md\n"
+                "## 规划\n"
+                "信息种类：研究结论\n"
+                "再排一个九十天。"
+            )
+
+        output = answer("帮我判断明天哪只股票会涨，给我一个具体的买入价。", own=True, speaker=speaker)
+        self.assertIn("## 没筛中", output)
+        self.assertIn("## 模型自述", output)
+        self.assertIn("信息种类：模型自述", output)
+        self.assertIn("今天先把想问的事写成一句", output)
+        self.assertNotIn("rensheng/", output)
+        self.assertNotIn("## 规划", output)
+        self.assertNotIn("## 主线", output)
+        self.assertNotIn("九十", output)
+
+    def test_api_and_cycle_refusal_do_not_ask_for_own_words(self):
+        missed = answer("帮我判断明天哪只股票会涨。", model="api", own=True, speaker=_no_speaker)
+        self.assertIn("## 没筛中", missed)
+        self.assertNotIn("## 模型自述", missed)
+        blocked = answer(
+            "我想要一个九十天的周期规划，把接下来三个月排开。今天有一小时。",
+            own=True,
+            speaker=_no_speaker,
+        )
+        self.assertIn("十四天", blocked)
+        self.assertNotIn("## 模型自述", blocked)
+
+    def test_own_words_follow_the_weights_file(self):
+        self.assertEqual(use_own_words(None), linked_weights() is not None)
+        self.assertFalse(use_own_words("api"))
 
     def test_cli_rejects_an_unknown_backend_and_skips_an_invalid_summary(self):
         self.assertIsNone(configured_backend())

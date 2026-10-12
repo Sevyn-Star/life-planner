@@ -11,7 +11,8 @@ from planner.model.dispatch import generate
 from planner.model.package import build_package
 from planner.paths import FIXTURES, INDEX_PATH
 from planner.reply.check import checked_draft
-from planner.reply.fill import render, render_model, render_safety, situation_lines
+from planner.model.local.speak import clean_own, speak
+from planner.reply.fill import render, render_model, render_own, render_safety, situation_lines
 from planner.session import load_session, save_session
 from planner.session.review import (
     ask_switch,
@@ -40,6 +41,8 @@ def answer(
     context: str | None = None,
     model: str | None = None,
     transport=None,
+    own: bool = False,
+    speaker=None,
     session: str | None = None,
     session_dir: Path | None = None,
     today: date | None = None,
@@ -90,7 +93,17 @@ def answer(
         if sheet.entry_id == "cycle":
             sheet.cycle_blocked = True
     outcome = select(sheet, segments, entries)
-    reply = _finish(outcome, segments, sheet, prior, context=context, model=model, transport=transport)
+    reply = _finish(
+        outcome,
+        segments,
+        sheet,
+        prior,
+        context=context,
+        model=model,
+        transport=transport,
+        own=own,
+        speaker=speaker,
+    )
     if not session:
         return reply
     if "## 规划" not in reply or "## 没筛中" in reply:
@@ -111,8 +124,14 @@ def answer(
     return reply
 
 
-def _finish(outcome, segments, sheet, prior, *, context, model, transport) -> str:
+def _finish(outcome, segments, sheet, prior, *, context, model, transport, own, speaker) -> str:
     template = render(outcome, segments)
+    if outcome.status != "plan":
+        if own and model != "api" and not sheet.cycle_blocked:
+            prose = _own_prose(sheet, outcome.nearest_title, speaker)
+            if prose:
+                return render_own(outcome, prose)
+        return template
     if not model or "## 规划" not in template:
         return template
     summary = resolve_summary(context)
@@ -134,6 +153,17 @@ def _finish(outcome, segments, sheet, prior, *, context, model, transport) -> st
         scope=summary.scope,
     )
     return render_model(outcome, segments, action=draft.action, situation=extra)
+
+
+def _own_prose(sheet, nearest: str, speaker) -> str:
+    fn = speaker or speak
+    try:
+        raw = fn(sheet, nearest)
+    except ModelError:
+        return ""
+    if not isinstance(raw, str):
+        return ""
+    return clean_own(raw)
 
 
 def run_fixtures() -> list[str]:

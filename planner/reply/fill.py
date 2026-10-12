@@ -75,6 +75,30 @@ def _reject(outcome: Outcome) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def render_own(outcome: Outcome, prose: str) -> str:
+    """书没筛中之后的模型自述。不补书的路径。"""
+    lines = [
+        "## 筛选单",
+        "",
+        *_sheet_lines(outcome.sheet),
+        "",
+        "## 没筛中",
+        "",
+        outcome.note,
+        f"最接近的入口是「{outcome.nearest_title}」。",
+        "可以把问题说得更具体，或承认它在这本书外面。",
+        "",
+        "## 模型自述",
+        "",
+        prose.strip(),
+        "",
+        "信息种类：模型自述",
+        "",
+        FOOTER,
+    ]
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def render_model(outcome: Outcome, segments: list[Segment], *, action: str, situation: list[str]) -> str:
     """最小动作换成已核对的模型稿，并在四块之后附上形势对照。其余仍用筛中段落。"""
     return _plan(outcome, segments, action=action, situation=situation)

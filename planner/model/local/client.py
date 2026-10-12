@@ -1,6 +1,6 @@
-"""确认权重在项目外，再把同一份输入包发给本机的 OpenAI 兼容服务。
+"""确认权重在项目的 models 目录里，再把同一份输入包发给本机的 OpenAI 兼容服务。
 
-不读取权重内容，也不把权重拷进仓库。服务要由本机事先启动。
+不读取权重内容。服务要由本机事先启动。
 """
 
 import os
@@ -9,7 +9,28 @@ from pathlib import Path
 from planner.model import ModelError
 from planner.model.chat import build_messages
 from planner.model.http import post_chat
-from planner.paths import CORPUS, ROOT
+from planner.paths import CORPUS, MODELS_DIR
+
+
+WEIGHT_NAME = "qwen2.5-0.5b-instruct-q4_k_m.gguf"
+
+
+def linked_weights() -> Path | None:
+    """没指定路径时，用项目 models/ 里这份已经下载的权重。"""
+    raw = os.environ.get("PLANNER_LOCAL_WEIGHTS", "").strip()
+    if raw:
+        return checked_weights()
+    path = MODELS_DIR / WEIGHT_NAME
+    if path.is_file():
+        return path.resolve()
+    return None
+
+
+def use_own_words(model: str | None) -> bool:
+    """书没筛中时，只有这份本地权重可以自己组织语言。API 不走这条路。"""
+    if model == "api":
+        return False
+    return linked_weights() is not None
 
 
 def checked_weights() -> Path:
@@ -19,10 +40,12 @@ def checked_weights() -> Path:
     path = Path(raw).expanduser().resolve()
     if not path.exists():
         raise ModelError("本地模型的权重不存在")
-    root = ROOT.resolve()
+    models = MODELS_DIR.resolve()
     corpus = CORPUS.resolve()
-    if path == root or root in path.parents or path == corpus or corpus in path.parents:
-        raise ModelError("本地模型的权重要放在项目外面")
+    if path == corpus or corpus in path.parents:
+        raise ModelError("本地模型的权重不放进书稿")
+    if path != models and models not in path.parents:
+        raise ModelError("本地模型的权重放在项目的 models 目录")
     return path
 
 

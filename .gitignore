@@ -5,3 +5,7 @@ data/index/*.json
 !data/index/.gitkeep
 data/sessions/*
 !data/sessions/.gitkeep
+data/chats/*
+!data/chats/.gitkeep
+models/*
+!models/.gitkeep
