@@ -3,3 +3,5 @@ __pycache__/
 data/index/*.jsonl
 data/index/*.json
 !data/index/.gitkeep
+data/sessions/*
+!data/sessions/.gitkeep

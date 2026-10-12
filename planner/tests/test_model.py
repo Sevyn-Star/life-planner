@@ -353,8 +353,10 @@ class ModelTests(unittest.TestCase):
 
         out = io.StringIO()
         err = io.StringIO()
-        with redirect_stdout(out), redirect_stderr(err), patch("urllib.request.urlopen", _no_network):
-            code = main(["--model", "api", "--context", str(INVALID), TEXT])
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ["PLANNER_SESSION_DIR"] = tmp
+            with redirect_stdout(out), redirect_stderr(err), patch("urllib.request.urlopen", _no_network):
+                code = main(["--model", "api", "--context", str(INVALID), TEXT])
         self.assertEqual(code, 0)
         self.assertIn("## 规划", out.getvalue())
         self.assertNotIn("## 形势对照", out.getvalue())

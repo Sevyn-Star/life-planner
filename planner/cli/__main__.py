@@ -1,4 +1,6 @@
+import os
 import sys
+from pathlib import Path
 
 from planner.corpus.index import build_index
 from planner.model import ModelError
@@ -11,9 +13,11 @@ USAGE = """用法：
   python3 -m planner.cli --rebuild-index
   python3 -m planner.cli --fixtures
   python3 -m planner.cli \"你的近况\"
+  python3 -m planner.cli --session current \"你的近况\"
   python3 -m planner.cli --context data/context/sample-tight.md \"你的近况\"
 
 启用模型时设置 PLANNER_MODEL=api 或 local。没启用时仍用填段模板。
+默认把复查记在 data/sessions/current.yaml。五个验收问题不写会话。
 """
 
 
@@ -36,6 +40,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         model_arg, args = _option(args, "--model")
         context, args = _option(args, "--context")
+        session_arg, args = _option(args, "--session")
     except ValueError as exc:
         print(f"缺少 {exc}", file=sys.stderr)
         return 2
@@ -54,7 +59,18 @@ def main(argv: list[str] | None = None) -> int:
         print(USAGE.strip())
         return 2
     summary = resolve_summary(context) if model else None
-    output = answer(" ".join(args), context=context, model=model)
+    session_dir = os.environ.get("PLANNER_SESSION_DIR", "").strip()
+    try:
+        output = answer(
+            " ".join(args),
+            context=context,
+            model=model,
+            session=session_arg or "current",
+            session_dir=Path(session_dir) if session_dir else None,
+        )
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     if model and summary is None and context:
         print("这份形势摘要没有来源、日期，或已经过期，改走初版模板。", file=sys.stderr)
     elif model and summary is None and "## 规划" in output:

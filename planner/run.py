@@ -1,3 +1,6 @@
+from datetime import date
+from pathlib import Path
+
 from planner.cli.intake import build_sheet
 from planner.corpus.index import build_index, load_index
 from planner.filter.entries import load_entries
@@ -9,32 +12,113 @@ from planner.model.package import build_package
 from planner.paths import FIXTURES, INDEX_PATH
 from planner.reply.check import checked_draft
 from planner.reply.fill import render, render_model, render_safety, situation_lines
-from planner.session import load_session
+from planner.session import load_session, save_session
+from planner.session.review import (
+    ask_switch,
+    bringing,
+    choice,
+    fourteen_ready,
+    insert_review,
+    next_review,
+    only_switch,
+    pin_return,
+    remember,
+    review_note,
+    shrinking,
+    side_topic,
+    stamp_review,
+    stay_reply,
+    switched_note,
+)
 from planner.yamlutil import parse_yaml
 
 
-def answer(user_text: str, *, rebuild: bool = False, context: str | None = None, model: str | None = None, transport=None) -> str:
+def answer(
+    user_text: str,
+    *,
+    rebuild: bool = False,
+    context: str | None = None,
+    model: str | None = None,
+    transport=None,
+    session: str | None = None,
+    session_dir: Path | None = None,
+    today: date | None = None,
+) -> str:
     """整理筛选单，筛选，用留下的段填回复。
 
     model 为空时不调用模型。启用之后，没有合格摘要、调用失败或路径对不上，都退回同一份模板。
+    给出会话名时，先读上一份记录，写完规划再更新同一份。没给会话名时不读写。
     """
+    current = today or date.today()
     if rebuild or not INDEX_PATH.exists():
         build_index()
     segments = load_index()
     entries = load_entries()
-    sheet = build_sheet(user_text, entries)
-    session = load_session(None)
+    record = load_session(session, root=session_dir)
+    prior = record.to_dict() if record else None
+    text = user_text
+    switched = False
+    if record and choice(user_text) == "switch":
+        switched = True
+        if record.switch_text and only_switch(user_text):
+            text = record.switch_text
+        record.switch = ""
+        record.switch_text = ""
+    sheet = build_sheet(text, entries)
     if sheet.safety:
         nearest = next((entry.label for entry in entries if entry.id == "recovery"), "低谷、恢复")
         return render_safety(sheet, segments, nearest)
+    if record:
+        pin_return(sheet, record)
+        if record.switch and choice(user_text) == "stay" and not switched:
+            record.switch = ""
+            record.switch_text = ""
+            save_session(record, session, session_dir)
+            return stay_reply(record)
+        if not switched and side_topic(sheet, record):
+            record.switch = f"要不要换到「{sheet.domain}」"
+            record.switch_text = sheet.text
+            save_session(record, session, session_dir)
+            return ask_switch(sheet, record)
+        if fourteen_ready(record, sheet.text, current) and not sheet.capacity_low:
+            sheet.has_fourteen_day_evidence = True
+            if sheet.cycle_blocked:
+                sheet.cycle_blocked = False
+    shrink = bool(record) and not switched and sheet.entry_id == record.entry_id and shrinking(sheet.text)
+    if shrink:
+        sheet.capacity_low = True
+        if sheet.entry_id == "cycle":
+            sheet.cycle_blocked = True
     outcome = select(sheet, segments, entries)
+    reply = _finish(outcome, segments, sheet, prior, context=context, model=model, transport=transport)
+    if not session:
+        return reply
+    if "## 规划" not in reply or "## 没筛中" in reply:
+        if record and switched:
+            save_session(record, session, session_dir)
+        return reply
+    same = bool(record) and record.entry_id == sheet.entry_id and not switched
+    review_day = record.review_date if same else next_review(current)
+    reply = stamp_review(reply, review_day, low=sheet.capacity_low)
+    if record and same:
+        decision = "缩小" if shrink else ("继续" if bringing(sheet.text) else "证据还没贴来")
+        reply = insert_review(reply, review_note(record, decision, bringing(sheet.text)))
+    elif record and switched:
+        reply = insert_review(reply, switched_note(record))
+    updated = remember(reply, sheet, record, review_day, bringing(sheet.text))
+    if updated is not None:
+        save_session(updated, session, session_dir)
+    return reply
+
+
+def _finish(outcome, segments, sheet, prior, *, context, model, transport) -> str:
     template = render(outcome, segments)
     if not model or "## 规划" not in template:
         return template
     summary = resolve_summary(context)
     if summary is None:
         return template
-    package = build_package(sheet, outcome.kept, summary, session)
+    package = build_package(sheet, outcome.kept, summary, prior)
     try:
         raw = generate(model, package, transport=transport)
     except ModelError:
