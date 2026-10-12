@@ -75,7 +75,30 @@ def _reject(outcome: Outcome) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _plan(outcome: Outcome, segments: list[Segment]) -> str:
+def render_model(outcome: Outcome, segments: list[Segment], *, action: str, situation: list[str]) -> str:
+    """最小动作换成已核对的模型稿，并在四块之后附上形势对照。其余仍用筛中段落。"""
+    return _plan(outcome, segments, action=action, situation=situation)
+
+
+def situation_lines(text: str, *, title: str, day: str, source: str, scope: str) -> list[str]:
+    return [
+        "## 形势对照",
+        "",
+        text.strip(),
+        "",
+        "信息种类：形势判断",
+        f"材料：{title} · {day} · {source}",
+        f"适用范围：{scope}",
+    ]
+
+
+def _plan(
+    outcome: Outcome,
+    segments: list[Segment],
+    *,
+    action: str | None = None,
+    situation: list[str] | None = None,
+) -> str:
     sheet = outcome.sheet
     entry = outcome.entry
     assert entry is not None
@@ -84,7 +107,8 @@ def _plan(outcome: Outcome, segments: list[Segment]) -> str:
         outcome.note = "筛中的原文不足两段，所以不写规划。"
         outcome.nearest_title = entry.label
         return _reject(outcome)
-    action = next(item[1] for item in suggestions if item[0] == "先做")
+    if action is None:
+        action = next(item[1] for item in suggestions if item[0] == "先做")
     evidence = _evidence(outcome.kept, sheet, entry)
     lines = [
         "## 筛选单",
@@ -118,9 +142,11 @@ def _plan(outcome: Outcome, segments: list[Segment]) -> str:
             "",
             _next_time(outcome.kept, entry),
             "",
-            FOOTER,
         ]
     )
+    if situation:
+        lines.extend([*situation, ""])
+    lines.append(FOOTER)
     return "\n".join(lines).rstrip() + "\n"
 
 
