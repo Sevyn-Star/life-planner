@@ -73,6 +73,21 @@ def next_review(today: date) -> str:
     return (today + timedelta(days=14)).isoformat()
 
 
+def ask_switch_plain(sheet: Sheet, record: Record) -> str:
+    return (
+        f"上一轮还在说「{record.question}」，入口是「{record.entry_label}」。"
+        f"这次说的是「{sheet.domain}」。两条线不并在一起。"
+        "要换就回我「换主线」，不换就回「不换」。"
+    )
+
+
+def stay_plain(record: Record) -> str:
+    return (
+        f"那就还留在「{record.entry_label}」。这次不换。"
+        f"上次那一步先做完，{record.review_date}再看。"
+    )
+
+
 def ask_switch(sheet: Sheet, record: Record) -> str:
     lines = [
         "## 要不要换主线",

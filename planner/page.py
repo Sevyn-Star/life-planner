@@ -6,6 +6,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from planner.chats import list_chats, load_chat, save_chat
 from planner.page_reply import iter_page_answer
 from planner.paths import ROOT
+from planner.session import session_path
 
 HOST = "127.0.0.1"
 PORT = 8765
@@ -79,7 +80,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _stream_answer(self):
         try:
-            text, earlier = self._read_turn()
+            text, earlier, chat = self._read_turn()
         except ValueError as exc:
             self._send_text(400, str(exc))
             return
@@ -93,7 +94,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Connection", "close")
         self.end_headers()
         try:
-            for event, data in iter_page_answer(text, earlier=earlier):
+            for event, data in iter_page_answer(text, earlier=earlier, session=chat or None):
                 self.wfile.write(_sse(event, data))
                 self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError):
@@ -132,10 +133,16 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("请求不完整。")
             text = data.get("text", "")
             earlier = data.get("earlier")
-            if not isinstance(text, str) or not isinstance(earlier, list):
+            chat = data.get("chat") or ""
+            if not isinstance(text, str) or not isinstance(earlier, list) or not isinstance(chat, str):
                 raise ValueError("请求不完整。")
-            return text.strip(), earlier
-        return raw.strip(), []
+            if chat:
+                try:
+                    session_path(chat)
+                except ValueError as exc:
+                    raise ValueError("这段对话对不上。") from exc
+            return text.strip(), earlier, chat
+        return raw.strip(), [], ""
 
     def _read_body(self) -> str:
         try:
