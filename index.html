@@ -74,8 +74,119 @@
       flex-direction: column;
     }
     header { padding: 1.1rem 1.15rem 0.35rem; }
+    .head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.8rem; }
     h1 { margin: 0; font-size: 1.15rem; font-weight: 650; letter-spacing: -0.02em; }
     header p { margin: 0.25rem 0 0; color: #5c6778; font-size: 0.92rem; }
+    .compile {
+      flex: none;
+      margin-top: 0.15rem;
+      padding: 0.35rem 0.7rem;
+      border: 1px solid #d5dbe4;
+      border-radius: 999px;
+      background: #fff;
+      color: inherit;
+      font: inherit;
+      font-size: 0.86rem;
+      cursor: pointer;
+    }
+    .compile:hover { background: #f6f8fb; }
+    .sheet {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.2rem;
+      background: rgba(28, 36, 48, 0.28);
+    }
+    .sheet[hidden] { display: none; }
+    .sheet-card {
+      width: min(960px, 100%);
+      max-height: min(86dvh, 820px);
+      display: flex;
+      flex-direction: column;
+      border-radius: 16px;
+      background: #fff;
+      box-shadow: 0 16px 40px rgba(28, 36, 48, 0.18);
+    }
+    .sheet-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.75rem 0.85rem;
+      border-bottom: 1px solid #e6eaf0;
+    }
+    .sheet-bar strong { margin-right: auto; font-size: 0.95rem; }
+    .sheet-bar button, .sheet-close {
+      border: 0;
+      border-radius: 999px;
+      background: #f3f5f8;
+      color: inherit;
+      font: inherit;
+      font-size: 0.84rem;
+      padding: 0.3rem 0.7rem;
+      cursor: pointer;
+    }
+    .sheet-card.showing-map { width: min(1100px, calc(100vw - 1.6rem)); }
+    .sheet-bar button[aria-pressed="true"] { background: #1c2430; color: #fff; }
+    .sheet-body { overflow: auto; padding: 1rem 1.15rem 1.2rem; }
+    .sheet-body h2 { margin: 0 0 0.35rem; font-size: 1.05rem; }
+    .sheet-body h3 { margin: 1rem 0 0.35rem; font-size: 0.92rem; }
+    .sheet-body p, .sheet-body li { white-space: pre-wrap; }
+    .sheet-body ol { margin: 0.2rem 0 0; padding-left: 1.2rem; }
+    .sheet-body li { margin: 0.45rem 0; }
+    .sheet-body .how { display: block; margin-top: 0.15rem; color: #3d4858; }
+    .mind-svg { display: block; width: 100%; height: auto; }
+    .mind-fit {
+      display: flex;
+      justify-content: center;
+      width: 100%;
+      overflow: hidden;
+    }
+    .mind {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5.5rem;
+      width: max-content;
+      min-height: 360px;
+      margin: 0 auto;
+      padding: 1.6rem 1.4rem 2rem;
+    }
+    .mind-lines {
+      position: absolute;
+      inset: 0;
+      overflow: visible;
+      pointer-events: none;
+    }
+    .mind-side { display: flex; flex-direction: column; justify-content: center; gap: 1.6rem; flex: none; z-index: 1; }
+    .mind-arm { display: flex; align-items: center; gap: 3.2rem; flex: none; }
+    .mind-leaves { display: flex; flex-direction: column; gap: 0.7rem; flex: none; }
+    .mind-side.left .mind-leaves { align-items: flex-end; }
+    .mind-side.right .mind-leaves { align-items: flex-start; }
+    .mind-node, .mind-root, .leaf {
+      position: relative;
+      z-index: 1;
+      flex: none;
+      background: #fff;
+      border: 1.5px solid #d5dbe3;
+      border-radius: 12px;
+      box-shadow: 0 1px 2px rgba(28, 36, 48, 0.04);
+      line-height: 1.45;
+    }
+    .mind-node, .leaf { padding: 0.4rem 0.75rem; max-width: 16rem; }
+    .mind-root {
+      max-width: 11rem;
+      padding: 0.7rem 0.9rem;
+      border-width: 2px;
+      border-color: #1c2430;
+      border-radius: 14px;
+      font-weight: 650;
+      text-align: center;
+    }
+    .leaf { font-size: 0.86rem; }
     .menu {
       position: fixed;
       z-index: 20;
@@ -99,6 +210,7 @@
       cursor: pointer;
     }
     .menu button:hover { background: #f3f5f8; }
+    .menu button.danger { color: #9a3412; }
     .chats input {
       width: 100%;
       border: 0;
@@ -202,8 +314,13 @@
   </aside>
   <div class="app">
     <header>
-      <h1>我想听一句今天能做的话</h1>
-      <p>我说卡在哪，你接着告诉我今天能做什么。</p>
+      <div class="head-row">
+        <div>
+          <h1>我想听一句今天能做的话</h1>
+          <p>我说卡在哪，你接着告诉我今天能做什么。</p>
+        </div>
+        <button type="button" id="compile" class="compile" hidden>整理</button>
+      </div>
     </header>
     <div class="thread" id="thread">
       <div class="empty" id="empty">
@@ -220,9 +337,21 @@
     </form>
     <!-- result -->
   </div>
+  <div id="sheet" class="sheet" hidden>
+    <div class="sheet-card" role="dialog" aria-label="整理这段对话">
+      <div class="sheet-bar">
+        <strong>这段对话</strong>
+        <button type="button" data-view="doc" aria-pressed="true">计划文档</button>
+        <button type="button" data-view="map" aria-pressed="false">思维导图</button>
+        <button type="button" class="sheet-close" id="sheet-close">关闭</button>
+      </div>
+      <div class="sheet-body" id="sheet-body"></div>
+    </div>
+  </div>
   <div id="menu" class="menu" hidden>
     <button type="button" data-act="rename">重命名</button>
     <button type="button" data-act="note">写备注</button>
+    <button type="button" class="danger" data-act="delete">删除</button>
   </div>
   <script>
     const thread = document.querySelector("#thread");
@@ -232,6 +361,12 @@
     const send = document.querySelector(".send");
     const form = document.querySelector("#ask");
     const menu = document.querySelector("#menu");
+    const menuHome = menu.innerHTML;
+    const compile = document.querySelector("#compile");
+    const sheet = document.querySelector("#sheet");
+    const sheetBody = document.querySelector("#sheet-body");
+    let brief = null;
+    let briefView = "doc";
     const origin = location.protocol === "file:" ? "http://127.0.0.1:8765" : "";
     const openKey = "planner-open";
     let turns = [];
@@ -240,6 +375,20 @@
     let currentNote = "";
 
     document.querySelector("#new-chat").addEventListener("click", () => beginNew());
+    compile.addEventListener("click", () => openBrief());
+    document.querySelector("#sheet-close").addEventListener("click", () => closeSheet());
+    sheet.addEventListener("click", (event) => {
+      if (event.target === sheet) closeSheet();
+    });
+    sheet.querySelector(".sheet-bar").addEventListener("click", (event) => {
+      const view = event.target.getAttribute("data-view");
+      if (!view || !brief) return;
+      briefView = view;
+      sheet.querySelectorAll("[data-view]").forEach((button) => {
+        button.setAttribute("aria-pressed", button.getAttribute("data-view") === view ? "true" : "false");
+      });
+      drawBrief();
+    });
     form.addEventListener("submit", (event) => event.preventDefault());
     send.addEventListener("click", () => sendText(box.value));
     box.addEventListener("keydown", (event) => {
@@ -254,14 +403,31 @@
     });
     bindStarters(starter);
     menu.addEventListener("click", (event) => {
+      event.stopPropagation();
       const act = event.target.getAttribute("data-act");
       const id = menu.dataset.id;
+      if (!act || !id) return;
+      if (act === "delete") {
+        menu.innerHTML = '<button type="button" class="danger" data-act="confirm-delete">删掉这段</button><button type="button" data-act="cancel-delete">取消</button>';
+        return;
+      }
+      if (act === "cancel-delete") {
+        hideMenu();
+        return;
+      }
+      if (act === "confirm-delete") {
+        hideMenu();
+        removeChat(id);
+        return;
+      }
       hideMenu();
-      if (act && id) editChat(id, act);
+      editChat(id, act);
     });
     document.addEventListener("click", () => hideMenu());
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") hideMenu();
+      if (event.key !== "Escape") return;
+      if (!sheet.hidden) closeSheet();
+      hideMenu();
     });
     window.addEventListener("scroll", () => hideMenu(), true);
     loadChats();
@@ -289,6 +455,7 @@
       currentNote = "";
       showStarter();
       drawChats(window.__chats || []);
+      syncCompile();
       box.focus();
     }
 
@@ -344,6 +511,7 @@
       currentNote = chat.note || "";
       thread.replaceChildren();
       turns.forEach((item) => addBubble(item.role === "user" ? "mine" : "reply", item.content));
+      syncCompile();
       drawChats(window.__chats || []);
       box.focus();
     }
@@ -381,9 +549,243 @@
     function hideMenu() {
       menu.hidden = true;
       menu.dataset.id = "";
+      menu.innerHTML = menuHome;
+    }
+
+    function syncCompile() {
+      compile.hidden = turns.length === 0;
+    }
+
+    function closeSheet() {
+      sheet.hidden = true;
+    }
+
+    async function openBrief() {
+      if (!turns.length || send.disabled) return;
+      compile.disabled = true;
+      try {
+        const response = await fetch(origin + "/brief", {
+          method: "POST",
+          headers: { "Content-Type": "application/json; charset=utf-8" },
+          body: JSON.stringify({ title: currentTitle, messages: turns, chat: currentId }),
+        });
+        if (!response.ok) return;
+        brief = await response.json();
+        briefView = "doc";
+        sheet.querySelectorAll("[data-view]").forEach((button) => {
+          button.setAttribute("aria-pressed", button.getAttribute("data-view") === "doc" ? "true" : "false");
+        });
+        drawBrief();
+        sheet.hidden = false;
+      } finally {
+        compile.disabled = false;
+      }
+    }
+
+    function drawBrief() {
+      sheetBody.replaceChildren();
+      if (!brief) return;
+      sheet.querySelector(".sheet-card").classList.toggle("showing-map", briefView === "map");
+      if (briefView === "map") drawMap(brief);
+      else drawDoc(brief);
+    }
+
+    function drawDoc(data) {
+      const title = document.createElement("h2");
+      title.textContent = data.title || "这段对话";
+      sheetBody.append(title);
+      const question = document.createElement("p");
+      const line = (data.question || "").replace(/。+$/, "");
+      question.textContent = data.entry ? line + "。入口是「" + data.entry + "」。" : data.question;
+      sheetBody.append(question);
+      addSection("你说过", (data.said || []).slice(1), false);
+      addSection("今天做", data.steps, true);
+      addSection("先不要", data.avoid, true);
+      addSection("停下来", data.stop, true);
+      if (data.review) addSection("再看", [data.review], true);
+    }
+
+    function addSection(name, items, pointed) {
+      if (!items || !items.length) return;
+      const heading = document.createElement("h3");
+      heading.textContent = name;
+      sheetBody.append(heading);
+      if (!pointed) {
+        const list = document.createElement("ul");
+        items.forEach((item) => {
+          const line = document.createElement("li");
+          line.textContent = item;
+          list.append(line);
+        });
+        sheetBody.append(list);
+        return;
+      }
+      const list = document.createElement("ol");
+      items.forEach((item) => {
+        const line = document.createElement("li");
+        line.textContent = item.title;
+        if (item.how) {
+          const how = document.createElement("span");
+          how.className = "how";
+          how.textContent = item.how;
+          line.append(how);
+        }
+        list.append(line);
+      });
+      sheetBody.append(list);
+    }
+
+    const mindColors = ["#3b6fd8", "#2f9e62", "#e0892f", "#d4534e", "#7a5cc4"];
+
+    function clipText(text, limit) {
+      const flat = String(text || "").replace(/\s+/g, " ").trim();
+      if (flat.length <= limit) return flat;
+      return flat.slice(0, limit).replace(/[，,。 ]+$/, "") + "…";
+    }
+
+    function drawMap(data) {
+      const branches = [];
+      pushBranch(branches, "你说过", (data.said || []).slice(1));
+      pushBranch(branches, "今天做", (data.steps || []).map((item) => item.title));
+      pushBranch(branches, "先不要", (data.avoid || []).map((item) => item.title));
+      pushBranch(branches, "停下来", (data.stop || []).map((item) => item.title));
+      if (data.review) pushBranch(branches, "再看", [data.review.title || "再看"]);
+      if (data.review && data.review.how) {
+        const review = branches.find((branch) => branch.name === "再看");
+        if (review) review.items = [data.review.how];
+      }
+      branches.forEach((branch, index) => {
+        branch.color = mindColors[index % mindColors.length];
+      });
+      const left = branches.filter((_, index) => index % 2 === 0);
+      const right = branches.filter((_, index) => index % 2 === 1);
+      const laidLeft = layoutArms(left);
+      const laidRight = layoutArms(right);
+      const rootLines = wrapText(clipText(data.question, 36), 9);
+      const rootW = 168;
+      const rootH = Math.max(64, rootLines.length * 22 + 28);
+      const gap = 78;
+      const height = Math.max(laidLeft.height, laidRight.height, rootH) + 56;
+      const rootX = 28 + laidLeft.width + gap;
+      const rootY = (height - rootH) / 2;
+      const rightX = rootX + rootW + gap;
+      const width = rightX + laidRight.width + 28;
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("class", "mind-svg");
+      svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+      placeArms(svg, laidLeft, 28, (height - laidLeft.height) / 2, "left", rootX, rootY, rootW, rootH);
+      placeArms(svg, laidRight, rightX, (height - laidRight.height) / 2, "right", rootX, rootY, rootW, rootH);
+      svg.append(nodeBox(rootX, rootY, rootW, rootH, rootLines, "#1c2430", "#fff", 2));
+      sheetBody.append(svg);
+    }
+
+    function layoutArms(list) {
+      const arms = list.map((branch) => {
+        const leaves = branch.items.map((text) => {
+          const lines = wrapText(text, 16);
+          return { lines, w: 236, h: lines.length * 22 + 18 };
+        });
+        const leavesH = leaves.reduce((sum, leaf) => sum + leaf.h, 0) + Math.max(0, leaves.length - 1) * 12;
+        const nodeW = Math.max(76, branch.name.length * 18 + 28);
+        return { ...branch, leaves, leavesH, nodeW, nodeH: 42, h: Math.max(leavesH, 42) };
+      });
+      let y = 0;
+      arms.forEach((arm) => {
+        arm.y = y;
+        y += arm.h + 32;
+      });
+      const height = Math.max(80, y - (arms.length ? 32 : 0));
+      const width = arms.reduce((max, arm) => Math.max(max, 236 + 72 + arm.nodeW), 0);
+      return { arms, height, width };
+    }
+
+    function placeArms(svg, laid, x, y, side, rootX, rootY, rootW, rootH) {
+      const rootCx = side === "left" ? rootX : rootX + rootW;
+      const rootCy = rootY + rootH / 2;
+      laid.arms.forEach((arm) => {
+        const armY = y + arm.y;
+        const nodeY = armY + (arm.h - arm.nodeH) / 2;
+        const nodeX = side === "left" ? x + 236 + 72 : x;
+        const leafX = side === "left" ? x : nodeX + arm.nodeW + 72;
+        svg.append(mindCurve(rootCx, rootCy, side === "left" ? nodeX + arm.nodeW : nodeX, nodeY + arm.nodeH / 2, arm.color, 2.6));
+        svg.append(nodeBox(nodeX, nodeY, arm.nodeW, arm.nodeH, [arm.name], arm.color, arm.color + "18", 1.5));
+        let leafY = armY + (arm.h - arm.leavesH) / 2;
+        arm.leaves.forEach((leaf) => {
+          const joint = side === "left" ? leafX + leaf.w : leafX;
+          svg.append(mindCurve(side === "left" ? nodeX : nodeX + arm.nodeW, nodeY + arm.nodeH / 2, joint, leafY + leaf.h / 2, arm.color, 1.6));
+          svg.append(nodeBox(leafX, leafY, leaf.w, leaf.h, leaf.lines, arm.color, "#fff", 1.5));
+          leafY += leaf.h + 12;
+        });
+      });
+    }
+
+    function nodeBox(x, y, w, h, lines, color, fill, strokeWidth) {
+      const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      rect.setAttribute("x", x);
+      rect.setAttribute("y", y);
+      rect.setAttribute("width", w);
+      rect.setAttribute("height", h);
+      rect.setAttribute("rx", 12);
+      rect.setAttribute("fill", fill);
+      rect.setAttribute("stroke", color);
+      rect.setAttribute("stroke-width", strokeWidth);
+      group.append(rect);
+      lines.forEach((line, index) => {
+        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        text.setAttribute("x", x + w / 2);
+        text.setAttribute("y", y + (h - lines.length * 22) / 2 + 16 + index * 22);
+        text.setAttribute("text-anchor", "middle");
+        text.setAttribute("fill", "#1c2430");
+        text.setAttribute("font-size", "14");
+        text.setAttribute("font-family", "PingFang SC, Hiragino Sans GB, Noto Sans SC, sans-serif");
+        text.textContent = line;
+        group.append(text);
+      });
+      return group;
+    }
+
+    function wrapText(text, size) {
+      const flat = String(text || "").replace(/\s+/g, " ").trim();
+      if (!flat) return [""];
+      const lines = [];
+      let rest = flat;
+      while (rest.length > size) {
+        lines.push(rest.slice(0, size));
+        rest = rest.slice(size);
+      }
+      if (rest) lines.push(rest);
+      return lines;
+    }
+
+    function pushBranch(branches, name, items) {
+      const kept = (items || []).map((item) => String(item || "").replace(/\s+/g, " ").trim()).filter((item) => item);
+      if (kept.length) branches.push({ name, items: kept });
+    }
+
+    function mindCurve(x1, y1, x2, y2, color, width) {
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      const bend = Math.max(48, Math.abs(x2 - x1) * 0.55);
+      const dir = x2 >= x1 ? 1 : -1;
+      path.setAttribute("d", "M " + x1 + " " + y1 + " C " + (x1 + bend * dir) + " " + y1 + ", " + (x2 - bend * dir) + " " + y2 + ", " + x2 + " " + y2);
+      path.setAttribute("fill", "none");
+      path.setAttribute("stroke", color);
+      path.setAttribute("stroke-width", width);
+      path.setAttribute("stroke-linecap", "round");
+      return path;
+    }
+
+
+    async function removeChat(id) {
+      const response = await fetch(origin + "/chats/" + id, { method: "DELETE" });
+      if (!response.ok && response.status !== 404) return;
+      window.__chats = (window.__chats || []).filter((item) => item.id !== id);
+      if (currentId === id) beginNew();
+      else drawChats(window.__chats);
     }
 
     function openMenu(x, y, id) {
+      menu.innerHTML = menuHome;
       menu.dataset.id = id;
       menu.hidden = false;
       menu.style.left = "0px";
@@ -514,6 +916,7 @@
         turns.push({ role: "user", content: text });
         turns.push({ role: "assistant", content: spoken.trim() || bubble.textContent });
         await remember();
+        syncCompile();
       } catch (error) {
         bubble.textContent = "我这边还没连上。先确认这一页已经在本机打开。";
       } finally {

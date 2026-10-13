@@ -3,10 +3,11 @@
 import html
 import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from planner.chats import list_chats, load_chat, save_chat
+from planner.brief import compile_messages
+from planner.chats import delete_chat, list_chats, load_chat, save_chat
 from planner.page_reply import iter_page_answer
 from planner.paths import ROOT
-from planner.session import session_path
+from planner.session import delete_session, load_session, session_path
 
 HOST = "127.0.0.1"
 PORT = 8765
@@ -47,6 +48,23 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send(200, render_page())
 
+    def do_DELETE(self):
+        path = self.path.split("?", 1)[0]
+        if not path.startswith("/chats/"):
+            self._send(404, b"")
+            return
+        chat_id = path.removeprefix("/chats/")
+        try:
+            removed = delete_chat(chat_id)
+            delete_session(chat_id)
+        except ValueError as exc:
+            self._send_text(400, str(exc) or "这段对话对不上。")
+            return
+        if not removed:
+            self._send_text(404, "没有这段对话")
+            return
+        self._json(200, {"id": chat_id})
+
     def do_PUT(self):
         path = self.path.split("?", 1)[0]
         if not path.startswith("/chats/"):
@@ -70,6 +88,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.split("?", 1)[0]
+        if path == "/brief":
+            self._brief()
+            return
         if path == "/answer":
             self._stream_answer()
             return
@@ -77,6 +98,27 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, b"")
             return
         self._redirect("/")
+
+    def _brief(self):
+        try:
+            data = json.loads(self._read_body())
+            if not isinstance(data, dict) or not isinstance(data.get("messages"), list):
+                raise ValueError("请求不完整。")
+            title = data.get("title") or ""
+            chat = data.get("chat") or ""
+            if not isinstance(title, str) or not isinstance(chat, str):
+                raise ValueError("请求不完整。")
+        except (ValueError, json.JSONDecodeError) as exc:
+            self._send_text(400, str(exc) or "请求不完整。")
+            return
+        record = None
+        if chat:
+            try:
+                record = load_session(chat)
+            except ValueError as exc:
+                self._send_text(400, str(exc) or "这段对话对不上。")
+                return
+        self._json(200, compile_messages(data["messages"], title, record))
 
     def _stream_answer(self):
         try:

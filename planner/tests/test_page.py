@@ -24,6 +24,9 @@ class PageTests(unittest.TestCase):
         self.assertIn("我说卡在哪", html)
         self.assertIn('id="thread"', html)
         self.assertIn("新对话", html)
+        self.assertIn("删除", html)
+        self.assertIn('id="compile"', html)
+        self.assertIn("思维导图", html)
         self.assertNotIn("vitepress", html.lower())
         self.assertNotIn("<script src", html.lower())
 
@@ -144,6 +147,7 @@ class PageTests(unittest.TestCase):
             list(iter_page_answer(listening, streamer=boom, session="move", session_dir=root, today=day))
             switched = _tokens(iter_page_answer("换主线", streamer=speak_again, session="move", session_dir=root, today=day))
             self.assertIn("主线换过来了", switched)
+            self.assertIn("怎么做", switched)
             self.assertNotIn("docs/", switched)
             self.assertEqual(load_session("move", root=root).entry_id, "listening")
 
@@ -173,8 +177,8 @@ class PageTests(unittest.TestCase):
             finally:
                 page_reply.stream_human = original_speak
                 page_reply.linked_weights = original_weights
-            self.assertIn("听力", seen["prompt"])
-            self.assertEqual(seen["earlier"], [])
+            self.assertNotIn("prompt", seen)
+            self.assertIn("怎么做", heard)
             self.assertNotIn("阅读指南", heard)
 
     def test_crisis_and_early_cycle_do_not_replace_the_chat_line(self):
@@ -204,6 +208,37 @@ class PageTests(unittest.TestCase):
             ))
             self.assertIn("不排九十天", blocked)
             self.assertEqual(load_session("chat1", root=root).entry_id, "start")
+
+            list(iter_page_answer(
+                "我做完了，这是记录：写了半页学习状态。",
+                streamer=speak,
+                session="chat1",
+                session_dir=root,
+                today=day,
+            ))
+            prior = load_session("chat1", root=root).action
+            seen = {}
+
+            def opened_cycle(prompt):
+                seen["prompt"] = prompt
+                yield "继续原来那一步。"
+
+            opened = _tokens(iter_page_answer(
+                "我想要一个九十天的周期规划，把接下来三个月排开。今天有一小时。",
+                streamer=opened_cycle,
+                session="chat1",
+                session_dir=root,
+                today=date(2026, 10, 26),
+            ))
+            self.assertIn("原来那一步放进九十天", opened)
+            self.assertIn("2026-11-09", opened)
+            self.assertIn(prior[:24], opened)
+            self.assertNotIn("产品演示", opened)
+            self.assertNotIn("docs/", opened)
+            self.assertIn("怎么做", opened)
+            self.assertEqual(load_session("chat1", root=root).entry_id, "cycle")
+            self.assertEqual(load_session("chat1", root=root).action, prior)
+            self.assertNotIn("prompt", seen)
 
     def test_plain_answers_without_a_chat_do_not_write_sessions(self):
         before = sorted(path.name for path in SESSIONS_DIR.iterdir())
@@ -344,6 +379,142 @@ class PageTests(unittest.TestCase):
             server.shutdown()
             server.server_close()
             thread.join(timeout=2)
+
+    def test_a_plan_is_spoken_in_full(self):
+        def boom(_prompt):
+            raise AssertionError("筛中之后不该把步骤缩成模型的一句")
+            yield ""
+
+        spoken = _tokens(iter_page_answer(
+            "我只想练英语听力。今天有四十分钟，想要一个今天的练习。",
+            streamer=boom,
+        ))
+        self.assertIn("1. ", spoken)
+        self.assertIn("怎么做", spoken)
+        self.assertIn("30 秒", spoken)
+        self.assertIn("不要用第二遍", spoken)
+        self.assertIn("复测", spoken)
+        self.assertIn("不排长周期", spoken)
+        self.assertNotIn("rensheng/", spoken)
+        self.assertNotIn("文件：", spoken)
+        self.assertGreater(len(spoken), 80)
+
+    def test_asking_for_detail_finishes_the_current_plan(self):
+        day = date(2026, 10, 12)
+        listening = "我只想练英语听力。今天有四十分钟，想要一个今天的练习。"
+
+        def boom(_prompt):
+            raise AssertionError("要把规划说完时，不该写到一半被截断")
+            yield ""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            list(iter_page_answer(listening, streamer=boom, session="hear", session_dir=root, today=day))
+            more = _tokens(iter_page_answer("详细规划", streamer=boom, session="hear", session_dir=root, today=day))
+        self.assertIn("30 秒", more)
+        self.assertIn("怎么做", more)
+        self.assertIn("1. ", more)
+        self.assertTrue(more.rstrip().endswith("。"))
+
+    def test_detail_uses_the_earlier_question_as_points(self):
+        earlier = [
+            {"role": "user", "content": "我只想练英语听力。今天有四十分钟。"},
+            {"role": "assistant", "content": "先听一小段。"},
+        ]
+
+        def boom(_prompt):
+            raise AssertionError("详细计划要沿用刚才的事，不交给模型另编")
+            yield ""
+
+        spoken = _tokens(iter_page_answer("详细计划", earlier=earlier, streamer=boom))
+        self.assertIn("1. ", spoken)
+        self.assertIn("怎么做", spoken)
+        self.assertIn("30 秒", spoken)
+        self.assertNotIn("Happy", spoken)
+
+    def test_a_chat_compiles_into_a_plan_and_a_map(self):
+        from planner.brief import compile_messages
+
+        messages = [
+            {"role": "user", "content": "我只想练英语听力。今天有四十分钟。"},
+            {"role": "assistant", "content": "先听一小段。"},
+            {"role": "user", "content": "详细计划"},
+            {
+                "role": "assistant",
+                "content": "1. 选择 30 秒到 5 分钟的材料\n怎么做：先选定一段能合法打开的音频。\n\n2. 不要用第二遍盖掉第一遍\n先不要这样做：第一遍听到什么就留着什么。\n\n3. 到日子再看\n怎么做：十四天后再看这份记录。",
+            },
+        ]
+        brief = compile_messages(messages, "练听力")
+        self.assertEqual(brief["question"], "我只想练英语听力。今天有四十分钟。")
+        self.assertEqual(brief["said"], ["我只想练英语听力。今天有四十分钟。"])
+        self.assertEqual(brief["steps"][0]["how"], "先选定一段能合法打开的音频。")
+        self.assertEqual(brief["avoid"][0]["title"], "不要用第二遍盖掉第一遍")
+        self.assertEqual(brief["review"]["how"], "十四天后再看这份记录。")
+        self.assertNotIn("Happy", str(brief))
+
+        origin = chats.CHATS_DIR
+        with tempfile.TemporaryDirectory() as tmp:
+            chats.CHATS_DIR = Path(tmp)
+            try:
+                server = page.make_server(0)
+                thread = threading.Thread(target=server.serve_forever, daemon=True)
+                thread.start()
+                try:
+                    host, port = server.server_address
+                    body = json.dumps({"title": "练听力", "messages": messages, "chat": ""}).encode()
+                    request = urllib.request.Request(
+                        f"http://{host}:{port}/brief",
+                        data=body,
+                        headers={"Content-Type": "application/json; charset=utf-8"},
+                    )
+                    with urllib.request.urlopen(request) as response:
+                        payload = json.loads(response.read().decode("utf-8"))
+                    self.assertEqual(payload["steps"][0]["title"], "选择 30 秒到 5 分钟的材料")
+                    self.assertEqual(payload["review"]["kind"], "review")
+                finally:
+                    server.shutdown()
+                    server.server_close()
+                    thread.join(timeout=2)
+            finally:
+                chats.CHATS_DIR = origin
+
+    def test_a_cut_reply_stops_at_the_last_sentence(self):
+        from planner.model.local.speak import finish_at_sentence
+
+        cut = finish_at_sentence("先听一小段。然后再翻译成句子和", cut=True)
+        self.assertEqual(cut, "先听一小段。")
+        whole = finish_at_sentence("先听一小段。然后再翻译成句子和", cut=False)
+        self.assertEqual(whole, "先听一小段。然后再翻译成句子和")
+
+    def test_delete_removes_the_chat(self):
+        origin = chats.CHATS_DIR
+        with tempfile.TemporaryDirectory() as tmp:
+            chats.CHATS_DIR = Path(tmp)
+            try:
+                chats.save_chat("abc12345", [{"role": "user", "content": "你好"}])
+                server = page.make_server(0)
+                thread = threading.Thread(target=server.serve_forever, daemon=True)
+                thread.start()
+                try:
+                    host, port = server.server_address
+                    request = urllib.request.Request(f"http://{host}:{port}/chats/abc12345", method="DELETE")
+                    with urllib.request.urlopen(request) as response:
+                        self.assertEqual(response.status, 200)
+                    self.assertIsNone(chats.load_chat("abc12345"))
+                    again = urllib.request.Request(f"http://{host}:{port}/chats/abc12345", method="DELETE")
+                    with self.assertRaises(urllib.error.HTTPError) as caught:
+                        urllib.request.urlopen(again)
+                    self.assertEqual(caught.exception.code, 404)
+                    bad = urllib.request.Request(f"http://{host}:{port}/chats/nope", method="DELETE")
+                    with self.assertRaises(urllib.error.HTTPError) as caught:
+                        urllib.request.urlopen(bad)
+                    self.assertEqual(caught.exception.code, 400)
+                finally:
+                    server.shutdown()
+                    server.server_close()
+                    thread.join(timeout=2)
+            finally:
+                chats.CHATS_DIR = origin
 
 
 def _tokens(events) -> str:

@@ -35,6 +35,16 @@ def load_chat(chat_id: str) -> dict | None:
     return _read(path)
 
 
+def delete_chat(chat_id: str) -> bool:
+    path = _path(chat_id)
+    if path is None:
+        raise ValueError("对话编号不对")
+    if not path.is_file():
+        return False
+    path.unlink()
+    return True
+
+
 def save_chat(chat_id: str, messages: list, title: str | None = None, note: str | None = None) -> dict:
     path = _path(chat_id)
     if path is None:

@@ -23,6 +23,7 @@ from planner.session.review import (
     next_review,
     only_switch,
     pin_return,
+    place_in_cycle,
     remember,
     review_note,
     shrinking,
@@ -113,6 +114,8 @@ def answer(
     same = bool(record) and record.entry_id == sheet.entry_id and not switched
     review_day = record.review_date if same else next_review(current)
     reply = stamp_review(reply, review_day, low=sheet.capacity_low)
+    if record and record.action and sheet.entry_id == "cycle":
+        reply = place_in_cycle(reply, record.action)
     if record and same:
         decision = "缩小" if shrink else ("继续" if bringing(sheet.text) else "证据还没贴来")
         reply = insert_review(reply, review_note(record, decision, bringing(sheet.text)))

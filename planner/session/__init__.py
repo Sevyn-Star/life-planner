@@ -74,6 +74,12 @@ def load_session(session_id: str | None = None, *, root: Path | None = None) -> 
     )
 
 
+def delete_session(session_id: str, root: Path | None = None) -> None:
+    path = session_path(session_id, root)
+    if path.is_file():
+        path.unlink()
+
+
 def save_session(record: Record, session_id: str, root: Path | None = None) -> None:
     path = session_path(session_id, root)
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -65,7 +65,7 @@ def speak(sheet, nearest: str) -> str:
     return content
 
 
-HUMAN = "用口语回我，像朋友。先接住我的话，再给今天能做的一小步。两三句就停。"
+HUMAN = "用口语回我，像朋友。先接住我的话，再把今天这一步说完。写到句号再停，不要停在半句。"
 
 
 def stream_human(prompt: str, earlier=None, hint: str = ""):
@@ -82,20 +82,52 @@ def stream_human(prompt: str, earlier=None, hint: str = ""):
             chunks = _llama(path).create_chat_completion(
                 messages=messages,
                 temperature=0.6,
-                max_tokens=160,
+                max_tokens=512,
                 repeat_penalty=1.25,
                 stream=True,
             )
+            pending = ""
+            cut = False
             for chunk in chunks:
                 choice = chunk["choices"][0]
+                if choice.get("finish_reason") == "length":
+                    cut = True
                 delta = choice.get("delta") or {}
                 piece = delta.get("content")
                 if piece is None:
                     piece = choice.get("text") or ""
-                if piece:
-                    yield piece
+                if not piece:
+                    continue
+                pending += piece
+                while True:
+                    end = _sentence_end(pending)
+                    if end is None:
+                        break
+                    yield pending[: end + 1]
+                    pending = pending[end + 1 :]
+            if pending:
+                kept = finish_at_sentence(pending, cut=cut)
+                if kept:
+                    yield kept
     except (KeyError, TypeError, ValueError, OSError, RuntimeError) as exc:
         raise ModelError("本地模型没有返回可用回复") from exc
+
+
+def finish_at_sentence(text: str, *, cut: bool) -> str:
+    """字数到顶时，丢掉最后一个没写完的句子。"""
+    if not cut:
+        return text
+    last = max((text.rfind(mark) for mark in "。！？\n"), default=-1)
+    if last < 0:
+        return ""
+    return text[: last + 1]
+
+
+def _sentence_end(text: str) -> int | None:
+    positions = [text.find(mark) for mark in "。！？\n" if mark in text]
+    if not positions:
+        return None
+    return min(positions)
 
 
 def _turns(earlier) -> list[dict]:

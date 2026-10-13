@@ -155,6 +155,51 @@ def switched_note(record: Record) -> str:
     )
 
 
+def place_in_cycle(reply: str, action: str) -> str:
+    """把上一轮的最小动作放进九十天。书里的例子不顶替这一步。"""
+    lines = []
+    skip_basis = False
+    for line in reply.splitlines():
+        if skip_basis:
+            skip_basis = False
+            if line.startswith("   依据："):
+                continue
+        if line.startswith("- 最小动作："):
+            lines.append(f"- 最小动作：{action}")
+            continue
+        if _example_step(line):
+            skip_basis = True
+            continue
+        lines.append(line)
+    text = "\n".join(lines)
+    marker = "旁边的事这次不并进同一份计划。"
+    note = "放进这九十天的，是上一轮已经在做的最小动作。"
+    if marker in text and note not in text:
+        text = text.replace(marker, marker + note, 1)
+    return _renumber_suggestions(text).rstrip() + "\n"
+
+
+def _example_step(line: str) -> bool:
+    head, _, sentence = line.partition(". 先做：")
+    return bool(head.strip().isdigit() and sentence.startswith("在九十天内，我要"))
+
+
+def _renumber_suggestions(text: str) -> str:
+    lines = []
+    numbering = False
+    index = 0
+    for line in text.splitlines():
+        if line.startswith("## "):
+            numbering = line == "## 建议"
+            index = 0
+        head, dot, rest = line.partition(". ")
+        if numbering and head.isdigit() and dot:
+            index += 1
+            line = f"{index}. {rest}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def stamp_review(reply: str, day: str, *, low: bool) -> str:
     if low:
         replacement = f"- 复查：{day} 看这一次短动作留下的记录。这一轮不排长周期。"

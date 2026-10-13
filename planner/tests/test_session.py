@@ -92,12 +92,17 @@ class SessionTests(unittest.TestCase):
             root = Path(tmp)
             answer(TEXT, session="main", session_dir=root, today=DAY)
             answer(BROUGHT, session="main", session_dir=root, today=DAY)
+            prior = load_session("main", root=root).action
             opened = answer(CYCLE, session="main", session_dir=root, today=date(2026, 10, 26))
             self.assertIn("## 规划", opened)
             self.assertIn("docs/threads/part-5/", opened)
             self.assertNotIn("## 没筛中", opened)
+            self.assertIn(f"- 最小动作：{prior}", opened)
+            self.assertIn("上一轮已经在做的最小动作", opened)
+            self.assertNotIn("先做：在九十天内，我要", opened)
             record = load_session("main", root=root)
             self.assertEqual(record.entry_id, "cycle")
+            self.assertEqual(record.action, prior)
 
     def test_explicit_fourteen_day_evidence_opens_the_cycle(self):
         with tempfile.TemporaryDirectory() as tmp:
