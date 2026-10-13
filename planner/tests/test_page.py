@@ -92,7 +92,7 @@ class PageTests(unittest.TestCase):
     def test_a_chat_asks_before_leaving_its_line(self):
         day = date(2026, 10, 12)
         start = "我不知道从哪开始，只想重新动一下。现在没有正在做的事，今天大概有半小时。希望先有一个今天能做的动作。"
-        listening = "我只想练英语听力。今天有四十分钟，想要一个今天的练习。"
+        listening = "我只想练英语听力。还没练过。今天有四十分钟，想要一个今天的练习。"
 
         def speak(_prompt):
             yield "先动一下。"
@@ -309,7 +309,7 @@ class PageTests(unittest.TestCase):
         self.assertLess(kept.count(sentence), 4)
 
     def test_answer_endpoint_streams_tokens(self):
-        def fake(text, earlier=None, streamer=None, session=None, session_dir=None, today=None):
+        def fake(text, earlier=None, streamer=None, session=None, session_dir=None, today=None, **_extra):
             self.assertEqual(text, "今天有半小时")
             self.assertEqual(earlier, [])
             self.assertIsNone(session)
@@ -345,7 +345,7 @@ class PageTests(unittest.TestCase):
     def test_answer_endpoint_keeps_the_chat_id(self):
         seen = {}
 
-        def fake(text, earlier=None, streamer=None, session=None, session_dir=None, today=None):
+        def fake(text, earlier=None, streamer=None, session=None, session_dir=None, today=None, **_extra):
             seen["session"] = session
             yield ("token", "先动一下。")
 
@@ -401,7 +401,7 @@ class PageTests(unittest.TestCase):
 
     def test_asking_for_detail_finishes_the_current_plan(self):
         day = date(2026, 10, 12)
-        listening = "我只想练英语听力。今天有四十分钟，想要一个今天的练习。"
+        listening = "我只想练英语听力。还没练过。今天有四十分钟，想要一个今天的练习。"
 
         def boom(_prompt):
             raise AssertionError("要把规划说完时，不该写到一半被截断")
@@ -415,6 +415,118 @@ class PageTests(unittest.TestCase):
         self.assertIn("怎么做", more)
         self.assertIn("1. ", more)
         self.assertTrue(more.rstrip().endswith("。"))
+
+    def test_a_thin_opening_asks_one_missing_piece(self):
+        day = date(2026, 10, 12)
+
+        def boom(_prompt):
+            raise AssertionError("还没听清就不该写计划")
+            yield ""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            first = _tokens(iter_page_answer("我不知道从哪开始", streamer=boom, session="ask", session_dir=root, today=day))
+            self.assertIn("已经做过什么", first)
+            self.assertNotIn("多少时间", first)
+            self.assertNotIn("怎么做", first)
+            pending = load_session("ask", root=root)
+            self.assertEqual(pending.awaiting, "done")
+            self.assertEqual(pending.action, "")
+
+            second = _tokens(iter_page_answer("什么都没做过。", streamer=boom, session="ask", session_dir=root, today=day))
+            self.assertIn("多少时间", second)
+            self.assertNotIn("已经做过什么", second)
+            self.assertEqual(load_session("ask", root=root).awaiting, "capacity")
+
+            third = _tokens(iter_page_answer(
+                "今天有半小时，想要今天的一步。",
+                streamer=boom,
+                session="ask",
+                session_dir=root,
+                today=day,
+            ))
+            self.assertIn("怎么做", third)
+            saved = load_session("ask", root=root)
+            self.assertEqual(saved.entry_id, "start")
+            self.assertEqual(saved.awaiting, "")
+            self.assertTrue(saved.action)
+
+    def test_a_valid_summary_rewrites_only_the_step(self):
+        start = "我不知道从哪开始，只想重新动一下。现在没有正在做的事，今天大概有半小时。希望先有一个今天能做的动作。"
+        tight = _page_transport("今天只做 20 分钟，做完就停。", "空档更紧，所以这一步收紧到 20 分钟，长安排后移。")
+        open_step = _page_transport("今天把书里的最小动作做完，并留下证据。", "时间够用，所以只调整顺序，先留下证据。")
+
+        def boom(_prompt):
+            raise AssertionError("形势对照不该改走自由生成")
+            yield ""
+
+        tight_text = _tokens(iter_page_answer(
+            start,
+            streamer=boom,
+            model="api",
+            context="data/context/sample-tight.md",
+            transport=tight,
+        ))
+        open_text = _tokens(iter_page_answer(
+            start,
+            streamer=boom,
+            model="api",
+            context="data/context/sample-open.md",
+            transport=open_step,
+        ))
+        self.assertEqual(_point_title(tight_text), _point_title(open_text))
+        self.assertIn("今天只做 20 分钟，做完就停。", tight_text)
+        self.assertIn("今天把书里的最小动作做完，并留下证据。", open_text)
+        self.assertIn("形势判断：空档更紧", tight_text)
+        self.assertIn("时间被压短的一周", tight_text)
+        self.assertIn("2026-10-01", tight_text)
+        self.assertIn("本周可用时间记录", tight_text)
+        self.assertIn("形势判断：时间够用，所以只调整顺序", open_text)
+        self.assertNotIn("docs/", tight_text)
+        self.assertNotIn("20 分钟", open_text)
+
+    def test_a_bad_summary_keeps_the_book_step(self):
+        start = "我不知道从哪开始，只想重新动一下。现在没有正在做的事，今天大概有半小时。希望先有一个今天能做的动作。"
+
+        def outside(_messages, _package):
+            return '{"action":"去看 docs/threads/part-9/missing.md 再做完。","situation":"这一步收紧，但路径被改掉了。"}'
+
+        def untouched(_messages, _package):
+            raise AssertionError("不合格的摘要不该交给模型")
+
+        leaked = _tokens(iter_page_answer(
+            start,
+            model="api",
+            context="data/context/sample-tight.md",
+            transport=outside,
+        ))
+        self.assertNotIn("形势判断", leaked)
+        self.assertNotIn("part-9", leaked)
+        self.assertIn("怎么做", leaked)
+
+        plain = _tokens(iter_page_answer(
+            start,
+            model="api",
+            context="data/context/sample-invalid.md",
+            transport=untouched,
+        ))
+        self.assertNotIn("形势判断", plain)
+
+        def called(_messages, _package):
+            raise AssertionError("没筛中不该读形势摘要")
+
+        def speak(_prompt):
+            yield "先停在书外。"
+
+        missed = _tokens(iter_page_answer(
+            "帮我判断明天哪只股票会涨。",
+            streamer=speak,
+            model="api",
+            context="data/context/sample-tight.md",
+            transport=called,
+        ))
+        self.assertIn("先停在书外。", missed)
+        self.assertNotIn("形势判断", missed)
 
     def test_detail_uses_the_earlier_question_as_points(self):
         earlier = [
@@ -519,6 +631,22 @@ class PageTests(unittest.TestCase):
 
 def _tokens(events) -> str:
     return "".join(item[1] for item in events if item[0] == "token")
+
+
+def _page_transport(action, situation):
+    payload = json.dumps({"action": action, "situation": situation}, ensure_ascii=False)
+
+    def transport(_messages, _package):
+        return payload
+
+    return transport
+
+
+def _point_title(text: str) -> str:
+    for line in text.splitlines():
+        if line.startswith("1. "):
+            return line
+    raise AssertionError(text[:240])
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):

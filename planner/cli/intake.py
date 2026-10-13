@@ -113,6 +113,9 @@ def _capacity(text: str, low: bool) -> str:
     matched = re.search(r"今天[^。，]{0,18}", text)
     if matched:
         return matched.group(0).strip()
+    matched = re.search(r"(半小时|一小时|几分钟|\d+\s*分钟|\d+\s*小时)", text)
+    if matched:
+        return matched.group(0).strip()
     return "未说明，按一次 25–45 分钟的最小动作"
 
 

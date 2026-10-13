@@ -26,6 +26,8 @@ class Record:
     switch: str = ""
     switch_text: str = ""
     brought: str = ""
+    awaiting: str = ""
+    context: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -37,6 +39,8 @@ class Record:
             "review_date": self.review_date,
             "switch": self.switch,
             "brought": self.brought,
+            "awaiting": self.awaiting,
+            "context": self.context,
         }
 
 
@@ -59,6 +63,24 @@ def load_session(session_id: str | None = None, *, root: Path | None = None) -> 
     action = _text(data.get("action"))
     evidence = _text(data.get("evidence"))
     review_date = _text(data.get("review_date"))
+    awaiting = _text(data.get("awaiting"))
+    context = _text(data.get("context"))
+    if awaiting:
+        if not question:
+            return None
+        return Record(
+            question=question,
+            entry_id=entry_id,
+            entry_label=entry_label,
+            action=action,
+            evidence=evidence,
+            review_date=review_date,
+            switch=_text(data.get("switch")),
+            switch_text=_text(data.get("switch_text")),
+            brought=_text(data.get("brought")),
+            awaiting=awaiting,
+            context=context,
+        )
     if not question or not entry_id or not entry_label or not action or not review_date:
         return None
     return Record(
@@ -93,6 +115,8 @@ def save_session(record: Record, session_id: str, root: Path | None = None) -> N
         "switch": plain(record.switch),
         "switch_text": plain(record.switch_text, limit=160),
         "brought": plain(record.brought, limit=160),
+        "awaiting": plain(record.awaiting),
+        "context": plain(record.context, limit=400),
     }
     lines = [f"{key}: {yaml_quote(value)}" for key, value in fields.items()]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")

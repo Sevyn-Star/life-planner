@@ -49,9 +49,21 @@ def iter_page_answer(
     session: str | None = None,
     session_dir=None,
     today: date | None = None,
+    model: str | None = None,
+    context: str | None = None,
+    transport=None,
 ):
     """产出 (事件, 文字)。页面只显示 token，书名不单独贴在底下。"""
-    opened = _open(text, earlier=earlier, session=session, session_dir=session_dir, today=today)
+    opened = _open(
+        text,
+        earlier=earlier,
+        session=session,
+        session_dir=session_dir,
+        today=today,
+        model=model,
+        context=context,
+        transport=transport,
+    )
     if opened["kind"] == "fixed":
         yield ("token", opened["text"])
         return
@@ -92,7 +104,17 @@ def iter_page_answer(
             yield ("token", "这句话没说完。我换一种说法再问一次。")
 
 
-def _open(user_text: str, *, earlier=None, session, session_dir, today: date | None) -> dict:
+def _open(
+    user_text: str,
+    *,
+    earlier=None,
+    session,
+    session_dir,
+    today: date | None,
+    model: str | None = None,
+    context: str | None = None,
+    transport=None,
+) -> dict:
     current = today or date.today()
     sheet_text = user_text
     if _wants_detail(user_text):
@@ -106,6 +128,8 @@ def _open(user_text: str, *, earlier=None, session, session_dir, today: date | N
     record = load_session(session, root=session_dir) if session else None
     text = user_text
     switched = False
+    if record and record.awaiting and choice(user_text) != "switch":
+        sheet_text = record.context.rstrip("。") + "。" + user_text.strip()
     if record and choice(user_text) == "switch":
         switched = True
         if record.switch_text and only_switch(user_text):
@@ -134,7 +158,7 @@ def _open(user_text: str, *, earlier=None, session, session_dir, today: date | N
                 }
             sheet.entry_id = record.entry_id
             sheet.domain = record.entry_label
-        if not switched and side_topic(sheet, record):
+        if not switched and record.awaiting == "" and side_topic(sheet, record):
             record.switch = f"要不要换到「{sheet.domain}」"
             record.switch_text = sheet.text
             save_session(record, session, session_dir)
@@ -148,6 +172,11 @@ def _open(user_text: str, *, earlier=None, session, session_dir, today: date | N
         sheet.capacity_low = True
         if sheet.entry_id == "cycle":
             sheet.cycle_blocked = True
+    if session and sheet.entry_id and not sheet.cycle_blocked and not (record and record.action):
+        gap = _next_gap(lookup, sheet, record.awaiting if record else "")
+        if gap:
+            _save_pending(session, session_dir, sheet, gap, lookup)
+            return {"kind": "fixed", "text": _ASK[gap]}
     outcome = select(sheet, segments, entries)
     if sheet.cycle_blocked:
         _keep_switch_clear(record, switched, session, session_dir)
@@ -162,15 +191,21 @@ def _open(user_text: str, *, earlier=None, session, session_dir, today: date | N
     if "## 规划" not in template or "## 没筛中" in template:
         _keep_switch_clear(record, switched, session, session_dir)
         return {"kind": "speak", "prompt": text.strip(), "hint": "", "lead": "", "commit": None}
-    same = bool(record) and record.entry_id == sheet.entry_id and not switched
+    same = bool(record) and record.action and record.entry_id == sheet.entry_id and not switched
     review_day = record.review_date if same else next_review(current)
     template = stamp_review(template, review_day, low=sheet.capacity_low)
     entering_cycle = bool(record) and sheet.entry_id == "cycle" and record.entry_id != "cycle" and record.action
     if record and record.action and sheet.entry_id == "cycle":
         template = place_in_cycle(template, record.action)
+    found = _situation(outcome, record, model=model, context=context, transport=transport)
+    if found is not None:
+        draft, summary = found
+        template = _replace_action(template, draft.action)
     book = "" if sheet.entry_id == "cycle" else (_clip(outcome.kept[0].text, 60) if outcome.kept else "")
     hint = _step_hint(template, book)
-    detail = spoken_plan(template, outcome.kept)
+    detail = spoken_plan(template, outcome.kept, action=None if found is None else draft.action)
+    if found is not None:
+        detail = detail.rstrip() + "\n\n" + _situation_note(draft, summary)
     lead = ""
     if entering_cycle:
         lead = (
@@ -212,6 +247,46 @@ def _lead(shrink: bool, brought_now: bool) -> str:
     return "上次要留的记录还没贴来。"
 
 
+_ASK = {
+    "done": "你已经做过什么？还没做过也直接说。",
+    "capacity": "今天能拿出多少时间？",
+    "goal": "你是想要今天的一步，还是一份可以复查的规划？",
+}
+_DONE = ("已经", "做过", "没做", "没有做", "还没做", "什么都没", "写了", "练过", "没练", "没有正在", "目前没有")
+_GOAL = ("动作", "规划", "判断", "下一步", "一步", "练习", "该不该", "要不要", "九十", "周期")
+
+
+def _next_gap(text: str, sheet, answered: str) -> str | None:
+    if sheet.entry_id is None:
+        return None
+    if answered != "done" and not any(mark in text for mark in _DONE):
+        return "done"
+    if answered != "capacity" and sheet.capacity.startswith("未说明"):
+        return "capacity"
+    if answered != "goal" and not any(mark in text for mark in _GOAL):
+        return "goal"
+    return None
+
+
+def _save_pending(session, session_dir, sheet, gap: str, context: str) -> None:
+    from planner.session import Record
+
+    save_session(
+        Record(
+            question=sheet.question or context[:80],
+            entry_id=sheet.entry_id or "",
+            entry_label=sheet.domain,
+            action="",
+            evidence="",
+            review_date="",
+            awaiting=gap,
+            context=context,
+        ),
+        session,
+        session_dir,
+    )
+
+
 _DETAIL = ("详细", "展开", "说全", "具体一点", "具体些", "多说一点", "写完整")
 
 
@@ -236,7 +311,34 @@ def _earlier_question(earlier) -> str:
     return ""
 
 
-def spoken_plan(template: str, kept=None) -> str:
+def _situation(outcome, record, *, model, context, transport):
+    if not model:
+        return None
+    from planner.run import situation_draft
+
+    prior = record.to_dict() if record and record.action else None
+    return situation_draft(outcome, prior, context=context, model=model, transport=transport)
+
+
+def _replace_action(template: str, action: str) -> str:
+    lines = []
+    for line in template.splitlines():
+        if line.startswith("- 最小动作："):
+            lines.append(f"- 最小动作：{action}")
+        else:
+            lines.append(line)
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _situation_note(draft, summary) -> str:
+    return (
+        f"形势判断：{draft.situation.strip()}\n"
+        f"材料：{summary.title} · {summary.date} · {summary.source}\n"
+        f"适用范围：{summary.scope}"
+    )
+
+
+def spoken_plan(template: str, kept=None, action: str | None = None) -> str:
     """按点写出每一步要做什么。路径不进这段话。"""
     steps = _items(template, "先做：")
     avoids = _items(template, "先不做：")
@@ -244,6 +346,10 @@ def spoken_plan(template: str, kept=None) -> str:
     known = {_clean(item) for item in (*steps, *avoids, *stops)}
     points = []
     for sentence in steps:
+        if not points and action:
+            title = _clean(sentence)
+            points.append(f"1. {title}\n怎么做：{_as_sentence(action)}")
+            continue
         points.append(_point(len(points) + 1, sentence, "怎么做", kept, known))
     for sentence in avoids:
         points.append(_point(len(points) + 1, sentence, "先不要这样做", kept, known))

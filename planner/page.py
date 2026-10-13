@@ -5,6 +5,8 @@ import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from planner.brief import compile_messages
 from planner.chats import delete_chat, list_chats, load_chat, save_chat
+from planner.model.config import configured_backend
+from planner.model import ModelError
 from planner.page_reply import iter_page_answer
 from planner.paths import ROOT
 from planner.session import delete_session, load_session, session_path
@@ -136,7 +138,11 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Connection", "close")
         self.end_headers()
         try:
-            for event, data in iter_page_answer(text, earlier=earlier, session=chat or None):
+            try:
+                backend = configured_backend()
+            except ModelError:
+                backend = None
+            for event, data in iter_page_answer(text, earlier=earlier, session=chat or None, model=backend):
                 self.wfile.write(_sse(event, data))
                 self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError):

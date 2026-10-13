@@ -135,19 +135,12 @@ def _finish(outcome, segments, sheet, prior, *, context, model, transport, own, 
             if prose:
                 return render_own(outcome, prose)
         return template
-    if not model or "## 规划" not in template:
+    if "## 规划" not in template:
         return template
-    summary = resolve_summary(context)
-    if summary is None:
+    found = situation_draft(outcome, prior, context=context, model=model, transport=transport)
+    if found is None:
         return template
-    package = build_package(sheet, outcome.kept, summary, prior)
-    try:
-        raw = generate(model, package, transport=transport)
-    except ModelError:
-        return template
-    draft = checked_draft(raw, outcome, summary)
-    if draft is None:
-        return template
+    draft, summary = found
     extra = situation_lines(
         draft.situation,
         title=summary.title,
@@ -156,6 +149,24 @@ def _finish(outcome, segments, sheet, prior, *, context, model, transport, own, 
         scope=summary.scope,
     )
     return render_model(outcome, segments, action=draft.action, situation=extra)
+
+
+def situation_draft(outcome, prior, *, context, model, transport=None):
+    """筛中且摘要合格时，返回核对过的形势稿。否则为空，调用方仍用填段。"""
+    if not model or outcome.status != "plan":
+        return None
+    summary = resolve_summary(context)
+    if summary is None:
+        return None
+    package = build_package(outcome.sheet, outcome.kept, summary, prior)
+    try:
+        raw = generate(model, package, transport=transport)
+    except ModelError:
+        return None
+    draft = checked_draft(raw, outcome, summary)
+    if draft is None:
+        return None
+    return draft, summary
 
 
 def _own_prose(sheet, nearest: str, speaker) -> str:
