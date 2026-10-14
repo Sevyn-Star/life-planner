@@ -60,34 +60,49 @@ class PageTests(unittest.TestCase):
 
         seen = []
 
-        def streamer(prompt):
-            seen.append(prompt)
-            self.assertNotIn("rensheng/", prompt)
-            yield "先动一下。"
+        def own_speaker(sheet, nearest):
+            seen.append(nearest)
+            self.assertTrue(sheet.question)
+            return "今天先把这件事写下来，留下一句话。\n见 docs/threads/part-9/missing.md\n这是研究结论。"
 
-        events = list(iter_page_answer("帮我判断明天哪只股票会涨。", streamer=streamer))
+        import planner.page_reply as page_reply
+
+        original = page_reply.use_own_words
+        page_reply.use_own_words = lambda model: model != "api"
+        try:
+            events = list(iter_page_answer("帮我判断明天哪只股票会涨。", streamer=boom, speaker=own_speaker))
+            api_events = list(iter_page_answer(
+                "帮我判断明天哪只股票会涨。",
+                model="api",
+                speaker=lambda _sheet, _nearest: (_ for _ in ()).throw(AssertionError("API 不写自述")),
+            ))
+        finally:
+            page_reply.use_own_words = original
+        text = "".join(item[1] for item in events if item[0] == "token")
         self.assertTrue(seen)
-        self.assertIn("股票", seen[0])
-        self.assertNotIn("我现在说", seen[0])
-        self.assertNotIn("不要", seen[0])
-        self.assertFalse(any(item[0] == "note" for item in events))
-        self.assertEqual([item[1] for item in events if item[0] == "token"], ["先动一下。"])
+        self.assertIn("没有对上", text)
+        self.assertIn(seen[0], text)
+        self.assertIn("模型自述", text)
+        self.assertIn("信息种类：模型自述", text)
+        self.assertIn("今天先把这件事写下来", text)
+        self.assertNotIn("docs/", text)
+        self.assertNotIn("研究结论", text)
+        self.assertNotIn("先动一下", text)
+        api = "".join(item[1] for item in api_events if item[0] == "token")
+        self.assertIn("没有对上", api)
+        self.assertNotIn("模型自述", api)
 
-        def follow(prompt):
-            seen.append(prompt)
-            yield "那就五分钟。\n这本书没有直接写到这件事。\n我现在说：「好的」。"
-
-        later = list(iter_page_answer(
-            "那我今天只有五分钟呢？",
-            earlier=[{"role": "user", "content": "我不知道从哪开始"}, {"role": "assistant", "content": "先动一下。"}],
-            streamer=follow,
-        ))
-        self.assertIn("五分钟", seen[-1])
-        self.assertNotIn("我说", seen[-1])
-        self.assertEqual(
-            "".join(item[1] for item in later if item[0] == "token").strip(),
-            "那就五分钟。",
+        later = "".join(
+            item[1]
+            for item in iter_page_answer(
+                "那我今天只有五分钟呢？",
+                speaker=lambda _sheet, _nearest: "五分钟就记下这一句。",
+            )
+            if item[0] == "token"
         )
+        self.assertIn("没有对上", later)
+        self.assertIn("五分钟就记下这一句", later)
+        self.assertNotIn("我说", later)
 
     def test_a_chat_asks_before_leaving_its_line(self):
         day = date(2026, 10, 12)
@@ -515,17 +530,15 @@ class PageTests(unittest.TestCase):
         def called(_messages, _package):
             raise AssertionError("没筛中不该读形势摘要")
 
-        def speak(_prompt):
-            yield "先停在书外。"
-
         missed = _tokens(iter_page_answer(
             "帮我判断明天哪只股票会涨。",
-            streamer=speak,
+            speaker=lambda _sheet, _nearest: (_ for _ in ()).throw(AssertionError("API 不写自述")),
             model="api",
             context="data/context/sample-tight.md",
             transport=called,
         ))
-        self.assertIn("先停在书外。", missed)
+        self.assertIn("没有对上", missed)
+        self.assertNotIn("模型自述", missed)
         self.assertNotIn("形势判断", missed)
 
     def test_detail_uses_the_earlier_question_as_points(self):

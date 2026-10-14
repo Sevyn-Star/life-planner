@@ -12,8 +12,8 @@ from planner.corpus.index import build_index, load_index
 from planner.filter.entries import load_entries
 from planner.filter.select import select
 from planner.model import ModelError
-from planner.model.local.client import linked_weights
-from planner.model.local.speak import stream_human
+from planner.model.local.client import linked_weights, use_own_words
+from planner.model.local.speak import clean_own, speak, stream_human
 from planner.paths import INDEX_PATH
 from planner.reply.fill import render
 from planner.session import load_session, save_session
@@ -52,6 +52,7 @@ def iter_page_answer(
     model: str | None = None,
     context: str | None = None,
     transport=None,
+    speaker=None,
 ):
     """产出 (事件, 文字)。页面只显示 token，书名不单独贴在底下。"""
     opened = _open(
@@ -66,6 +67,13 @@ def iter_page_answer(
     )
     if opened["kind"] == "fixed":
         yield ("token", opened["text"])
+        return
+    if opened["kind"] == "own":
+        yield ("token", opened["text"])
+        if opened.get("own"):
+            prose = _page_own(opened["sheet"], opened["nearest"], speaker)
+            if prose:
+                yield ("token", "\n\n模型自述\n" + prose + "\n信息种类：模型自述")
         return
     if opened.get("commit"):
         opened["commit"]()
@@ -183,14 +191,11 @@ def _open(
         return {"kind": "fixed", "text": _CYCLE}
     if outcome.status != "plan":
         _keep_switch_clear(record, switched, session, session_dir)
-        hint = ""
-        if outcome.kept:
-            hint = _clip(outcome.kept[0].text, 60)
-        return {"kind": "speak", "prompt": text.strip(), "hint": hint, "lead": "", "commit": None}
+        return _own_result(outcome, model)
     template = render(outcome, segments)
     if "## 规划" not in template or "## 没筛中" in template:
         _keep_switch_clear(record, switched, session, session_dir)
-        return {"kind": "speak", "prompt": text.strip(), "hint": "", "lead": "", "commit": None}
+        return _own_result(outcome, model)
     same = bool(record) and record.action and record.entry_id == sheet.entry_id and not switched
     review_day = record.review_date if same else next_review(current)
     template = stamp_review(template, review_day, low=sheet.capacity_low)
@@ -309,6 +314,42 @@ def _earlier_question(earlier) -> str:
             if content and not _wants_detail(content):
                 return content
     return ""
+
+
+def _own_result(outcome, model) -> dict:
+    nearest = outcome.nearest_title or "书外"
+    return {
+        "kind": "own",
+        "text": f"这本书没有对上这段话。最接近的入口是「{nearest}」。",
+        "sheet": outcome.sheet,
+        "nearest": nearest,
+        "own": use_own_words(model),
+    }
+
+
+_OWN_KIND = ("研究结论", "个人经验", "待验证假设", "形势判断")
+
+
+def _page_own(sheet, nearest: str, speaker) -> str:
+    fn = speaker or speak
+    try:
+        raw = fn(sheet, nearest)
+    except ModelError:
+        return ""
+    if not isinstance(raw, str):
+        return ""
+    return _plain_own(raw)
+
+
+def _plain_own(text: str) -> str:
+    lines = []
+    for line in clean_own(text).splitlines():
+        if any(kind in line for kind in _OWN_KIND):
+            continue
+        if "rensheng/" in line or "docs/" in line:
+            continue
+        lines.append(line)
+    return "\n".join(lines).strip()
 
 
 def _situation(outcome, record, *, model, context, transport):
