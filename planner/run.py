@@ -15,10 +15,13 @@ from planner.model.local.speak import clean_own, speak
 from planner.reply.fill import render, render_model, render_own, render_safety, situation_lines
 from planner.session import load_session, save_session
 from planner.session.review import (
+    ASK,
     ask_switch,
     bringing,
     choice,
     fourteen_ready,
+    hold_question,
+    next_gap,
     insert_review,
     next_review,
     only_switch,
@@ -47,11 +50,13 @@ def answer(
     session: str | None = None,
     session_dir: Path | None = None,
     today: date | None = None,
+    follow_up: bool = False,
 ) -> str:
     """整理筛选单，筛选，用留下的段填回复。
 
     model 为空时不调用模型。启用之后，没有合格摘要、调用失败或路径对不上，都退回同一份模板。
     给出会话名时，先读上一份记录，写完规划再更新同一份。没给会话名时不读写。
+    follow_up 为真时，和页面一样缺一项只问那一项，答完才写四块回复。
     """
     current = today or date.today()
     if rebuild or not INDEX_PATH.exists():
@@ -60,6 +65,9 @@ def answer(
     entries = load_entries()
     record = load_session(session, root=session_dir)
     prior = record.to_dict() if record else None
+    sheet_text = user_text
+    if follow_up and record and record.awaiting and choice(user_text) != "switch":
+        sheet_text = record.context.rstrip("。") + "。" + user_text.strip()
     text = user_text
     switched = False
     if record and choice(user_text) == "switch":
@@ -68,7 +76,8 @@ def answer(
             text = record.switch_text
         record.switch = ""
         record.switch_text = ""
-    sheet = build_sheet(text, entries)
+    lookup = text if text != user_text else sheet_text
+    sheet = build_sheet(lookup, entries)
     if sheet.safety:
         nearest = next((entry.label for entry in entries if entry.id == "recovery"), "低谷、恢复")
         return render_safety(sheet, segments, nearest)
@@ -79,7 +88,7 @@ def answer(
             record.switch_text = ""
             save_session(record, session, session_dir)
             return stay_reply(record)
-        if not switched and side_topic(sheet, record):
+        if not switched and not (follow_up and record.awaiting) and side_topic(sheet, record):
             record.switch = f"要不要换到「{sheet.domain}」"
             record.switch_text = sheet.text
             save_session(record, session, session_dir)
@@ -93,6 +102,11 @@ def answer(
         sheet.capacity_low = True
         if sheet.entry_id == "cycle":
             sheet.cycle_blocked = True
+    if follow_up and session and sheet.entry_id and not sheet.cycle_blocked and not (record and record.action):
+        gap = next_gap(lookup, sheet, record.awaiting if record else "")
+        if gap:
+            hold_question(session, session_dir, sheet, gap, lookup)
+            return ASK[gap] + "\n"
     outcome = select(sheet, segments, entries)
     reply = _finish(
         outcome,
@@ -111,7 +125,7 @@ def answer(
         if record and switched:
             save_session(record, session, session_dir)
         return reply
-    same = bool(record) and record.entry_id == sheet.entry_id and not switched
+    same = bool(record) and record.action and record.entry_id == sheet.entry_id and not switched
     review_day = record.review_date if same else next_review(current)
     reply = stamp_review(reply, review_day, low=sheet.capacity_low)
     if record and record.action and sheet.entry_id == "cycle":

@@ -12,6 +12,48 @@ _BROUGHT = ("留下了", "贴上", "做完了", "写好了", "这是记录", "�
 _SHRINK = ("做不到", "没做成", "没做完", "太难", "做不了", "没完成")
 
 
+ASK = {
+    "done": "你已经做过什么？还没做过也直接说。",
+    "capacity": "今天能拿出多少时间？",
+    "goal": "你是想要今天的一步，还是一份可以复查的规划？",
+}
+_DONE = ("已经", "做过", "没做", "没有做", "还没做", "什么都没", "写了", "练过", "没练", "没有正在", "目前没有")
+_GOAL = ("动作", "规划", "判断", "下一步", "一步", "练习", "该不该", "要不要", "九十", "周期")
+
+
+def next_gap(text: str, sheet: Sheet, answered: str = "") -> str | None:
+    """缺了已经做过的事、今天的时间或想要的结果时，只返回最先缺的那一项。"""
+    if sheet.entry_id is None:
+        return None
+    if answered != "done" and not any(mark in text for mark in _DONE):
+        return "done"
+    if answered != "capacity" and sheet.capacity.startswith("未说明"):
+        return "capacity"
+    if answered != "goal" and not any(mark in text for mark in _GOAL):
+        return "goal"
+    return None
+
+
+def hold_question(session_id: str, root, sheet: Sheet, gap: str, context: str) -> None:
+    """先记下在等哪一项。还没写出最小动作，所以不记复查日。"""
+    from planner.session import save_session
+
+    save_session(
+        Record(
+            question=sheet.question or context[:80],
+            entry_id=sheet.entry_id or "",
+            entry_label=sheet.domain,
+            action="",
+            evidence="",
+            review_date="",
+            awaiting=gap,
+            context=context,
+        ),
+        session_id,
+        root,
+    )
+
+
 def choice(text: str) -> str | None:
     if any(mark in text for mark in _STAY):
         return "stay"

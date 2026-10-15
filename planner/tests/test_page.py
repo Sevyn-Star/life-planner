@@ -576,6 +576,8 @@ class PageTests(unittest.TestCase):
         self.assertEqual(brief["avoid"][0]["title"], "不要用第二遍盖掉第一遍")
         self.assertEqual(brief["review"]["how"], "十四天后再看这份记录。")
         self.assertNotIn("Happy", str(brief))
+        self.assertEqual(brief["notice"], "")
+        self.assertIsNone(brief["situation"])
 
         origin = chats.CHATS_DIR
         with tempfile.TemporaryDirectory() as tmp:
@@ -602,6 +604,61 @@ class PageTests(unittest.TestCase):
                     thread.join(timeout=2)
             finally:
                 chats.CHATS_DIR = origin
+
+    def test_a_compiled_plan_cites_the_book_and_keeps_the_map_plain(self):
+        from planner.brief import compile_messages
+        from planner.paths import ROOT
+        from planner.reply.fill import FOOTER
+
+        question = "我只想练英语听力。还没练过。今天有四十分钟，想要一个今天的练习。"
+        spoken = _tokens(iter_page_answer(question))
+        self.assertNotIn("rensheng/", spoken)
+        self.assertNotIn("docs/", spoken)
+        self.assertNotIn("信息种类", spoken)
+        note = (
+            "\n\n形势判断：空档更紧，所以这一步收紧到 20 分钟。\n"
+            "材料：时间被压短的一周 · 2026-10-01 · 本人 2026-10-01 的本周可用时间记录\n"
+            "适用范围：只约束这一步的时长，不改书里的入口"
+        )
+        brief = compile_messages(
+            [
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": spoken + note},
+            ],
+            "练听力",
+        )
+        cited = [*brief["steps"], *brief["avoid"], *brief["stop"]]
+        self.assertTrue(cited)
+        for point in cited:
+            self.assertTrue(point["path"].startswith("rensheng/"))
+            self.assertTrue((ROOT / point["path"]).is_file())
+            self.assertTrue(point["chapter"])
+            self.assertIn(point["info"], ("研究结论", "个人经验", "待验证假设"))
+            self.assertNotIn("rensheng/", point["title"])
+            self.assertNotIn("形势判断", point["how"])
+        self.assertNotIn("path", brief["review"])
+        self.assertEqual(brief["situation"]["kind"], "形势判断")
+        self.assertEqual(brief["situation"]["title"], "时间被压短的一周")
+        self.assertEqual(brief["situation"]["date"], "2026-10-01")
+        self.assertIn("本周可用时间记录", brief["situation"]["source"])
+        self.assertNotIn("研究结论", brief["situation"]["kind"])
+        self.assertEqual(brief["notice"], FOOTER)
+        self.assertIn("韩先凯", brief["notice"])
+        self.assertIn("CC BY-NC 4.0", brief["notice"])
+        self.assertIn("背书", brief["notice"])
+        visible = "\n".join(
+            [
+                brief["question"],
+                brief["title"],
+                *brief["said"],
+                *(point["title"] for point in cited),
+                brief["review"]["title"],
+                brief["review"]["how"],
+            ]
+        )
+        self.assertNotIn("rensheng/", visible)
+        self.assertNotIn("docs/", visible)
+        self.assertNotIn("形势判断", visible)
 
     def test_a_cut_reply_stops_at_the_last_sentence(self):
         from planner.model.local.speak import finish_at_sentence

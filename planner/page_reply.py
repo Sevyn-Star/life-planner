@@ -18,10 +18,13 @@ from planner.paths import INDEX_PATH
 from planner.reply.fill import render
 from planner.session import load_session, save_session
 from planner.session.review import (
+    ASK,
     ask_switch_plain,
     bringing,
     choice,
     fourteen_ready,
+    hold_question,
+    next_gap,
     next_review,
     only_switch,
     pin_return,
@@ -181,10 +184,10 @@ def _open(
         if sheet.entry_id == "cycle":
             sheet.cycle_blocked = True
     if session and sheet.entry_id and not sheet.cycle_blocked and not (record and record.action):
-        gap = _next_gap(lookup, sheet, record.awaiting if record else "")
+        gap = next_gap(lookup, sheet, record.awaiting if record else "")
         if gap:
-            _save_pending(session, session_dir, sheet, gap, lookup)
-            return {"kind": "fixed", "text": _ASK[gap]}
+            hold_question(session, session_dir, sheet, gap, lookup)
+            return {"kind": "fixed", "text": ASK[gap]}
     outcome = select(sheet, segments, entries)
     if sheet.cycle_blocked:
         _keep_switch_clear(record, switched, session, session_dir)
@@ -250,46 +253,6 @@ def _lead(shrink: bool, brought_now: bool) -> str:
     if brought_now:
         return "上次的记录我看见了。"
     return "上次要留的记录还没贴来。"
-
-
-_ASK = {
-    "done": "你已经做过什么？还没做过也直接说。",
-    "capacity": "今天能拿出多少时间？",
-    "goal": "你是想要今天的一步，还是一份可以复查的规划？",
-}
-_DONE = ("已经", "做过", "没做", "没有做", "还没做", "什么都没", "写了", "练过", "没练", "没有正在", "目前没有")
-_GOAL = ("动作", "规划", "判断", "下一步", "一步", "练习", "该不该", "要不要", "九十", "周期")
-
-
-def _next_gap(text: str, sheet, answered: str) -> str | None:
-    if sheet.entry_id is None:
-        return None
-    if answered != "done" and not any(mark in text for mark in _DONE):
-        return "done"
-    if answered != "capacity" and sheet.capacity.startswith("未说明"):
-        return "capacity"
-    if answered != "goal" and not any(mark in text for mark in _GOAL):
-        return "goal"
-    return None
-
-
-def _save_pending(session, session_dir, sheet, gap: str, context: str) -> None:
-    from planner.session import Record
-
-    save_session(
-        Record(
-            question=sheet.question or context[:80],
-            entry_id=sheet.entry_id or "",
-            entry_label=sheet.domain,
-            action="",
-            evidence="",
-            review_date="",
-            awaiting=gap,
-            context=context,
-        ),
-        session,
-        session_dir,
-    )
 
 
 _DETAIL = ("详细", "展开", "说全", "具体一点", "具体些", "多说一点", "写完整")

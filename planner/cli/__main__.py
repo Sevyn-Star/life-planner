@@ -20,6 +20,8 @@ USAGE = """用法：
 启用模型时设置 PLANNER_MODEL=api 或 local。没启用时仍用填段模板。
 models/ 里有 Qwen2.5 0.5B 时，书没筛中会用它写一段模型自述。
 默认把复查记在 data/sessions/current.yaml。五个验收问题不写会话。
+给了 --session 时，缺了已经做过的事、今天的时间或想要的结果，先只问缺的那一项。
+没给 --session 时仍直接写回复。
 """
 
 
@@ -70,6 +72,7 @@ def main(argv: list[str] | None = None) -> int:
             own=use_own_words(model),
             session=session_arg or "current",
             session_dir=Path(session_dir) if session_dir else None,
+            follow_up=session_arg is not None,
         )
     except ValueError as exc:
         print(str(exc), file=sys.stderr)

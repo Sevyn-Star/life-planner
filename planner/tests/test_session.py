@@ -1,8 +1,13 @@
+import os
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from datetime import date
+from io import StringIO
 from pathlib import Path
 
+from planner.cli.__main__ import main
+from planner.page_reply import iter_page_answer
 from planner.paths import SESSIONS_DIR
 from planner.run import answer, run_fixtures
 from planner.session import load_session
@@ -177,6 +182,93 @@ class SessionTests(unittest.TestCase):
             self.assertIn("## 复查", output)
             self.assertIn("证据还没贴来", output)
             self.assertIn("## 形势对照", output)
+
+    def test_a_named_session_asks_one_gap_then_writes_four_blocks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            first = answer("我不知道从哪开始", session="ask", session_dir=root, today=DAY, follow_up=True)
+            self.assertEqual(first.strip(), "你已经做过什么？还没做过也直接说。")
+            self.assertNotIn("## 规划", first)
+            self.assertEqual(load_session("ask", root=root).awaiting, "done")
+
+            second = answer("什么都没做过。", session="ask", session_dir=root, today=DAY, follow_up=True)
+            self.assertEqual(second.strip(), "今天能拿出多少时间？")
+            self.assertEqual(load_session("ask", root=root).awaiting, "capacity")
+
+            third = answer(
+                "今天有半小时，想要今天的一步。",
+                session="ask",
+                session_dir=root,
+                today=DAY,
+                follow_up=True,
+            )
+            self.assertIn("## 主线", third)
+            self.assertIn("## 规划", third)
+            self.assertIn("## 建议", third)
+            self.assertIn("docs/threads/part-0/", third)
+            saved = load_session("ask", root=root)
+            self.assertEqual(saved.awaiting, "")
+            self.assertEqual(saved.entry_id, "start")
+            self.assertTrue(saved.action)
+
+    def test_the_same_missing_time_asks_the_same_question(self):
+        thin = "我不知道从哪开始。现在没有正在做的事。希望先有一个能做的动作。"
+        question = "今天能拿出多少时间？"
+        saved = {key: os.environ[key] for key in os.environ if key.startswith("PLANNER_")}
+        try:
+            for key in saved:
+                del os.environ[key]
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                os.environ["PLANNER_SESSION_DIR"] = tmp
+                page = "".join(
+                    piece
+                    for _event, piece in iter_page_answer(thin, session="page", session_dir=root, today=DAY)
+                )
+                out = StringIO()
+                with redirect_stdout(out):
+                    code = main(["--session", "ask", thin])
+                cli = out.getvalue()
+                self.assertEqual(code, 0)
+                self.assertIn(question, page)
+                self.assertIn(question, cli)
+                self.assertNotIn("已经做过什么", cli)
+                self.assertNotIn("## 规划", cli)
+                self.assertEqual(load_session("ask", root=root).awaiting, "capacity")
+
+                plain = StringIO()
+                with redirect_stdout(plain):
+                    plain_code = main([thin])
+                self.assertEqual(plain_code, 0)
+                self.assertIn("## 规划", plain.getvalue())
+                self.assertNotIn(question, plain.getvalue())
+        finally:
+            os.environ.pop("PLANNER_SESSION_DIR", None)
+            os.environ.update(saved)
+
+        direct = answer(thin)
+        self.assertIn("## 规划", direct)
+        self.assertNotIn(question, direct)
+        errors = run_fixtures()
+        self.assertEqual(errors, [])
+
+    def test_follow_up_skips_safety_and_a_blocked_cycle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            crisis = answer(
+                "我这两天有危险念头，不想活了。",
+                session="ask",
+                session_dir=root,
+                today=DAY,
+                follow_up=True,
+            )
+            self.assertIn("医疗", crisis)
+            self.assertNotIn("已经做过什么", crisis)
+            self.assertIsNone(load_session("ask", root=root))
+            blocked = answer(CYCLE, session="ask", session_dir=root, today=DAY, follow_up=True)
+            self.assertIn("## 没筛中", blocked)
+            self.assertNotIn("多少时间", blocked)
+            self.assertIsNone(load_session("ask", root=root))
 
     def test_session_name_rejects_a_path(self):
         with tempfile.TemporaryDirectory() as tmp:
