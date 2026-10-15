@@ -20,6 +20,7 @@ _LEADS = (
     ("怎么做：", "step"),
 )
 _BOOK_KINDS = ("研究结论", "个人经验", "待验证假设")
+_ASIDE = ("换主线", "同意换", "换吧", "就换主线", "不换", "不要换", "先不换", "留在原来")
 _SITUATION_LINE = ("形势判断：", "材料：", "适用范围：")
 
 
@@ -51,7 +52,7 @@ def compile_messages(messages, title: str = "", session=None) -> dict:
         review = {"title": "到日子再看", "how": f"{session.review_date} 再看这次留下的记录。", "kind": "review"}
     if not steps and not avoid and not stop and not review:
         steps = _fallback_steps(messages)
-    cited = _cite(_lookup(said) or question, [*steps, *avoid, *stop])
+    cited = _cite(_screen_text(said, [*steps, *avoid, *stop]) or question, [*steps, *avoid, *stop])
     entry = getattr(session, "entry_label", "") if session is not None else ""
     situation = _situation(latest_text)
     return {
@@ -73,9 +74,40 @@ def _detail_only(text: str) -> bool:
     return bare in set(_DETAIL)
 
 
-def _lookup(said: list[str]) -> str:
-    parts = [part.strip().rstrip("。") for part in said if part.strip()]
-    return "。".join(parts)
+def _aside(text: str) -> bool:
+    bare = text.strip().strip("。！？!?. ")
+    return bare in set(_ASIDE)
+
+
+def _screen_text(said: list[str], points: list[dict]) -> str:
+    """用能对上这些步骤的最近一段话去筛选，不把更早的另一条主线拼进来。"""
+    lines = [line for line in said if line.strip() and not _aside(line)]
+    if not lines:
+        return ""
+    needed = 0
+    for point in points:
+        if point.get("kind") == "review":
+            continue
+        if len(" ".join((point.get("title") or "").split()).strip("。！？ ")) >= 8:
+            needed += 1
+    best = ""
+    best_hits = -1
+    for count in range(1, len(lines) + 1):
+        text = "。".join(part.strip().rstrip("。") for part in lines[-count:])
+        hits = _hit_count(text, points)
+        if hits > best_hits:
+            best = text
+            best_hits = hits
+        if needed and hits >= needed:
+            return text
+    return best
+
+
+def _hit_count(text: str, points: list[dict]) -> int:
+    kept = _kept(text)
+    if not kept:
+        return 0
+    return sum(1 for point in points if point.get("kind") != "review" and _host(point.get("title") or "", kept))
 
 
 def _points(text: str) -> list[dict]:

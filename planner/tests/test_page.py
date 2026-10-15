@@ -660,6 +660,27 @@ class PageTests(unittest.TestCase):
         self.assertNotIn("docs/", visible)
         self.assertNotIn("形势判断", visible)
 
+    def test_a_later_plan_is_cited_from_its_own_question(self):
+        from planner.brief import compile_messages
+        from planner.paths import ROOT
+
+        question = "我已经留下十四天证据，想要一个九十天的周期规划。今天有一小时。"
+        spoken = _tokens(iter_page_answer(question))
+        brief = compile_messages(
+            [
+                {"role": "user", "content": "我只想练英语听力。还没练过。今天有四十分钟，想要一个今天的练习。"},
+                {"role": "assistant", "content": "1. 先听一小段\n怎么做：先听一小段。"},
+                {"role": "user", "content": "换主线"},
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": spoken},
+            ]
+        )
+        cited = [point for point in (*brief["steps"], *brief["avoid"], *brief["stop"]) if point.get("path")]
+        self.assertTrue(cited)
+        self.assertTrue(all("90-day" in point["path"] for point in cited))
+        self.assertTrue(all((ROOT / point["path"]).is_file() for point in cited))
+        self.assertNotIn("3-listening.md", str(point["path"] for point in cited))
+
     def test_a_cut_reply_stops_at_the_last_sentence(self):
         from planner.model.local.speak import finish_at_sentence
 
